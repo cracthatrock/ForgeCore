@@ -4,6 +4,7 @@ import { SettingsStore } from './store.js';
 import { createRegistry } from './registry.js';
 import { createDispatcher } from './dispatch.js';
 import { extensions } from './extensions/index.js';
+
 let config;
 try {
   config = loadConfig();
@@ -11,8 +12,10 @@ try {
   console.error(e instanceof Error ? e.message : 'Invalid configuration');
   process.exit(1);
 }
-const store = new SettingsStore(config.databasePath),
-  registry = createRegistry(extensions);
+
+const store = new SettingsStore(config.databasePath);
+const registry = createRegistry(extensions);
+
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
   allowedMentions: { parse: [] },
@@ -29,7 +32,9 @@ client.on(Events.Error, () =>
 );
 let stopping = false;
 function stop() {
-  if (stopping) return;
+  if (stopping) {
+    return;
+  }
   stopping = true;
   client.destroy();
   store.close();

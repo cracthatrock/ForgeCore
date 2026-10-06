@@ -4,6 +4,7 @@ import {
   PermissionFlagsBits,
   InteractionContextType,
 } from 'discord.js';
+
 export const core: Extension = {
   id: 'core',
   commands: [
@@ -33,15 +34,23 @@ export const core: Extension = {
       memberPermissions: PermissionFlagsBits.ManageGuild,
       cooldownMs: 3000,
       async execute({ interaction, store, registry }) {
-        const name = interaction.options.getString('name'),
-          enabled = interaction.options.getBoolean('enabled');
+        const name = interaction.options.getString('name');
+        const enabled = interaction.options.getBoolean('enabled');
+
         if (name !== null || enabled !== null) {
-          if (!name || enabled === null || !registry.plugins.has(name) || name === 'core')
+          if (
+            !name ||
+            enabled === null ||
+            !registry.plugins.has(name) ||
+            name === 'core'
+          ) {
             return interaction.editReply(
               'Provide a known extension name and enabled value. Core cannot be disabled.',
             );
+          }
           store.setEnabled(interaction.guildId, name, enabled);
         }
+
         await interaction.editReply({
           content: [...registry.plugins.keys()]
             .map(

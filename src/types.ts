@@ -4,6 +4,7 @@ import type {
   RESTPostAPIChatInputApplicationCommandsJSONBody,
 } from 'discord.js';
 import type { SettingsStore } from './store.js';
+
 export interface CommandContext {
   interaction: ChatInputCommandInteraction<'raw' | 'cached'>;
   store: SettingsStore;

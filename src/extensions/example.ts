@@ -1,5 +1,6 @@
 import type { Extension } from '../types.js';
 import { SlashCommandBuilder, InteractionContextType } from 'discord.js';
+
 // Trusted local code only. Follow this shape to build a new extension.
 export const example: Extension = {
   id: 'example',

@@ -2,9 +2,11 @@ import { REST, Routes } from 'discord.js';
 import { loadConfig } from './config.js';
 import { createRegistry } from './registry.js';
 import { extensions } from './extensions/index.js';
+
 try {
-  const config = loadConfig(),
-    registry = createRegistry(extensions);
+  const config = loadConfig();
+  const registry = createRegistry(extensions);
+
   await new REST({ version: '10' })
     .setToken(config.token)
     .put(Routes.applicationGuildCommands(config.clientId, config.guildId), {
