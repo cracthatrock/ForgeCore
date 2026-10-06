@@ -8,6 +8,14 @@ import {
   type TextChannel,
 } from 'discord.js';
 import type { Extension, CommandContext } from '../types.js';
+import type { SettingsStore } from '../store.js';
+import {
+  beginSetup,
+  handleTicketUI,
+  refreshTicket,
+  ticketView,
+  type TicketInteraction,
+} from './ticket-ui.js';
 
 const locks = new Set<string>();
 const permissions = PermissionFlagsBits;
@@ -50,9 +58,14 @@ async function transcript(channel: TextChannel) {
   );
 }
 
-async function execute({ interaction, store }: CommandContext) {
+export async function runTicket(
+  interaction: TicketInteraction,
+  store: SettingsStore,
+  action: string,
+  intake?: { subject: string; description: string },
+) {
   const guild = await interaction.client.guilds.fetch(interaction.guildId);
-  const action = interaction.options.getSubcommand();
+
   const member = await guild.members.fetch(interaction.user.id);
   const manager = member.permissions.has(permissions.ManageGuild);
 
@@ -63,6 +76,21 @@ async function execute({ interaction, store }: CommandContext) {
       );
     }
 
+    if (!interaction.isChatInputCommand()) return;
+    if (
+      !interaction.options.getChannel('category') &&
+      !interaction.options.getRole('staff')
+    ) {
+      return beginSetup(interaction);
+    }
+    if (
+      !interaction.options.getChannel('category') ||
+      !interaction.options.getRole('staff')
+    ) {
+      return interaction.editReply(
+        'Provide both category and staff, or run /ticket setup without options.',
+      );
+    }
     const categoryId = interaction.options.getChannel('category', true).id;
     const roleId = interaction.options.getRole('staff', true).id;
     const category = await guild.channels.fetch(categoryId);
@@ -148,6 +176,7 @@ async function execute({ interaction, store }: CommandContext) {
               permissions.ManageChannels,
               permissions.ManageRoles,
               permissions.AttachFiles,
+              permissions.EmbedLinks,
             ],
           },
         ],
@@ -160,22 +189,36 @@ async function execute({ interaction, store }: CommandContext) {
         throw error;
       }
 
-      await channel.send({
-        content:
-          'Welcome! Describe what you need help with. Staff: use /ticket claim. Export with /ticket transcript; lock with /ticket close.',
-        allowedMentions: { parse: [] },
-      });
+      const record = store.ticket(guild.id, channel.id)!;
+      record.subject = intake?.subject || 'Support request';
+      const message = await channel.send(ticketView(record));
+      if (message?.id) {
+        store.saveTicketDetails(
+          guild.id,
+          channel.id,
+          message.id,
+          staff.id,
+          record.subject,
+        );
+      }
+      if (intake?.description) {
+        await channel.send({
+          content: intake.description,
+          allowedMentions: { parse: [] },
+        });
+      }
       return interaction.editReply(`Ticket created: <#${channel.id}>`);
     }
 
-    const record = store.ticket(guild.id, interaction.channelId);
+    const record = store.ticket(guild.id, interaction.channelId!);
     if (!record) {
       return interaction.editReply(
         'Use this command inside a ticket created by this bot.',
       );
     }
 
-    const isStaff = manager || member.roles.cache.has(config.staff_role_id);
+    const isStaff =
+      manager || member.roles.cache.has(record.staff_role_id || config.staff_role_id);
     if (!isStaff && member.id !== record.owner_id) {
       return interaction.editReply(
         'Only the ticket owner or staff can access this ticket.',
@@ -200,6 +243,38 @@ async function execute({ interaction, store }: CommandContext) {
       });
     }
 
+    if (action === 'reopen') {
+      if (!isStaff) return interaction.editReply('Only staff can reopen tickets.');
+      if (!record.closed) return interaction.editReply('This ticket is already open.');
+      if (store.openTicket(guild.id, record.owner_id))
+        return interaction.editReply('The owner already has another open ticket.');
+      store.reopenTicket(guild.id, channel.id);
+      try {
+        await channel.permissionOverwrites.edit(record.owner_id, {
+          SendMessages: true,
+          AddReactions: null,
+          CreatePublicThreads: null,
+          CreatePrivateThreads: null,
+          SendMessagesInThreads: null,
+        });
+      } catch (error) {
+        store.closeTicket(guild.id, channel.id);
+        await refreshTicket(channel, store.ticket(guild.id, channel.id)!);
+        throw error;
+      }
+      await refreshTicket(channel, store.ticket(guild.id, channel.id)!);
+      return interaction.editReply('Ticket reopened.');
+    }
+
+    if (action === 'unclaim') {
+      if (!isStaff || (record.claimed_by !== member.id && !manager))
+        return interaction.editReply(
+          'Only the assigned staff member or a manager can release this claim.',
+        );
+      store.unclaimTicket(guild.id, channel.id);
+      await refreshTicket(channel, store.ticket(guild.id, channel.id)!);
+      return interaction.editReply('Ticket is now unassigned.');
+    }
     if (record.closed) {
       return interaction.editReply(
         'This ticket is already closed. You can still export its transcript.',
@@ -212,6 +287,7 @@ async function execute({ interaction, store }: CommandContext) {
       }
 
       const claimed = store.claimTicket(guild.id, channel.id, member.id);
+      await refreshTicket(channel, store.ticket(guild.id, channel.id)!);
       return interaction.editReply(
         claimed
           ? `Ticket assigned to ${member.user.tag}.`
@@ -227,6 +303,7 @@ async function execute({ interaction, store }: CommandContext) {
       SendMessagesInThreads: false,
     });
     store.closeTicket(guild.id, channel.id);
+    await refreshTicket(channel, store.ticket(guild.id, channel.id)!);
     await interaction.editReply(
       'Ticket closed. The channel is preserved for staff and transcript exports.',
     );
@@ -252,13 +329,13 @@ export const tickets: Extension = {
                 .setName('category')
                 .setDescription('Ticket category')
                 .addChannelTypes(ChannelType.GuildCategory)
-                .setRequired(true),
+                .setRequired(false),
             )
             .addRoleOption((option) =>
               option
                 .setName('staff')
                 .setDescription('Support staff role')
-                .setRequired(true),
+                .setRequired(false),
             ),
         )
         .addSubcommand((command) =>
@@ -285,8 +362,15 @@ export const tickets: Extension = {
         permissions.SendMessages,
         permissions.ReadMessageHistory,
         permissions.AttachFiles,
+        permissions.EmbedLinks,
       ],
-      execute,
+      execute: ({ interaction, store }: CommandContext) =>
+        runTicket(interaction, store, interaction.options.getSubcommand()),
     },
   ],
 };
+
+export const dispatchTicketUI = (
+  interaction: import('discord.js').Interaction,
+  store: SettingsStore,
+) => handleTicketUI(interaction, store, runTicket);

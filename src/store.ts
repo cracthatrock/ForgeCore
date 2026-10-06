@@ -47,12 +47,57 @@ export class SettingsStore {
       CREATE UNIQUE INDEX IF NOT EXISTS one_open_ticket
       ON tickets(guild_id, owner_id) WHERE closed = 0;
     `);
+    const migrate = (table: string, column: string, definition: string) => {
+      const columns = this.db.prepare(`PRAGMA table_info(${table})`).all();
+      if (!columns.some((entry) => entry.name === column)) {
+        this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      }
+    };
+    migrate('ticket_config', 'panel_channel_id', 'TEXT');
+    migrate('ticket_config', 'panel_message_id', 'TEXT');
+    migrate('tickets', 'control_message_id', 'TEXT');
+    migrate('tickets', 'staff_role_id', 'TEXT');
+    migrate('tickets', 'subject', "TEXT NOT NULL DEFAULT 'Support request'");
+  }
+
+  savePanel(guildId: string, channelId: string, messageId: string) {
+    this.db
+      .prepare(
+        'UPDATE ticket_config SET panel_channel_id=?, panel_message_id=? WHERE guild_id=?',
+      )
+      .run(id(channelId), id(messageId), id(guildId));
+  }
+
+  saveTicketDetails(
+    guildId: string,
+    channelId: string,
+    messageId: string,
+    roleId: string,
+    subject: string,
+  ) {
+    this.db
+      .prepare(
+        'UPDATE tickets SET control_message_id=?, staff_role_id=?, subject=? WHERE guild_id=? AND channel_id=?',
+      )
+      .run(id(messageId), id(roleId), subject.slice(0, 100), id(guildId), id(channelId));
+  }
+
+  reopenTicket(guildId: string, channelId: string) {
+    this.db
+      .prepare('UPDATE tickets SET closed=0 WHERE guild_id=? AND channel_id=?')
+      .run(id(guildId), id(channelId));
+  }
+
+  unclaimTicket(guildId: string, channelId: string) {
+    this.db
+      .prepare('UPDATE tickets SET claimed_by=NULL WHERE guild_id=? AND channel_id=?')
+      .run(id(guildId), id(channelId));
   }
 
   configureTickets(guildId: string, categoryId: string, staffRoleId: string) {
     this.db
       .prepare(
-        `INSERT INTO ticket_config VALUES (?, ?, ?)
+        `INSERT INTO ticket_config (guild_id, category_id, staff_role_id) VALUES (?, ?, ?)
       ON CONFLICT(guild_id) DO UPDATE SET category_id=excluded.category_id,
       staff_role_id=excluded.staff_role_id`,
       )
@@ -62,7 +107,14 @@ export class SettingsStore {
   ticketConfig(guildId: string) {
     return this.db
       .prepare('SELECT * FROM ticket_config WHERE guild_id=?')
-      .get(id(guildId)) as { category_id: string; staff_role_id: string } | undefined;
+      .get(id(guildId)) as
+      | {
+          category_id: string;
+          staff_role_id: string;
+          panel_channel_id: string | null;
+          panel_message_id: string | null;
+        }
+      | undefined;
   }
 
   openTicket(guildId: string, ownerId: string) {
@@ -130,4 +182,7 @@ export interface TicketRecord {
   owner_id: string;
   claimed_by: string | null;
   closed: number;
+  control_message_id?: string | null;
+  staff_role_id?: string | null;
+  subject?: string;
 }

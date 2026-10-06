@@ -4,6 +4,7 @@ import { SettingsStore } from './store.js';
 import { createRegistry } from './registry.js';
 import { createDispatcher } from './dispatch.js';
 import { extensions } from './extensions/index.js';
+import { dispatchTicketUI } from './extensions/tickets.js';
 
 let config;
 try {
@@ -25,7 +26,11 @@ const client = new Client({
 });
 const dispatch = createDispatcher({ registry, store });
 client.on(Events.InteractionCreate, (interaction) => {
-  void dispatch(interaction);
+  void (async () => {
+    if (!(await dispatchTicketUI(interaction, store))) {
+      await dispatch(interaction);
+    }
+  })();
 });
 client.once(Events.ClientReady, () =>
   console.log(`ForgeCore online with ${registry.commands.size} commands.`),

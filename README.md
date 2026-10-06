@@ -57,3 +57,11 @@ Register the new command with `npm run deploy`. The bot needs View Channels, Sen
 Ticket configuration, ownership, claims and closed state persist in SQLite. One open ticket per member per server is enforced. Changing setup affects new channels; existing permissions are not rewritten. Disable commands with `/extensions name:tickets enabled:false`. Server managers can delete preserved channels manually. Run a single instance: operation locks are process-local.
 
 Live checklist: verify ordinary-user setup denial, visibility with a second account, duplicate opens, staff-only claims, close and reopen, restart persistence, transcript export and extension disabling. Automated checks use simulated Discord interactions; live channel creation still needs testing with your bot credentials.
+
+## Guided support setup
+
+Run `/ticket setup` without options to open the private setup wizard. Select your support role, ticket category and public panel channel, then press **Publish support panel**. The wizard expires after ten minutes and rechecks Manage Server before publishing. The bot needs Embed Links in addition to the ticket permissions above.
+
+Members click **Get support**, enter a subject and description, and receive a private ticket with a status card. Staff use **Claim** or **Unclaim**; the assigned member is shown on the card. **Close** asks for confirmation. Closed tickets offer **Reopen** (staff only) and **Export transcript**. Controls use persistent ticket records and continue to work after a restart. Setup drafts expire on restart. Republishing makes old panels inactive. Reopening is blocked if the owner has another open ticket.
+
+The previous `/ticket setup category:... staff:...` still configures the command-only flow; use the wizard to publish a panel. Existing tickets remain accessible through slash commands. The wizard uses existing channels and roles; create those in Discord before running it. There is no web dashboard yet.

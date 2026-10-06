@@ -133,3 +133,57 @@ test('non-managers cannot configure tickets; unrelated members cannot export or 
     store.close();
   }
 });
+
+// Component entry points must enforce the same extension/server boundaries as commands.
+test('ticket UI rejects disabled extensions and stale panels without creating channels', async () => {
+  const { handleTicketUI } = await import('../src/extensions/ticket-ui.js');
+  const store = new SettingsStore(':memory:');
+  let calls = 0;
+  try {
+    const replies = [];
+    const button = {
+      customId: 'tickets:open',
+      guildId,
+      channelId,
+      user: { id: '823456789012345678' },
+      message: { id: channelId },
+      isButton: () => true,
+      isModalSubmit: () => false,
+      isRoleSelectMenu: () => false,
+      isChannelSelectMenu: () => false,
+      inGuild: () => true,
+      reply: async (value) => replies.push(value),
+    };
+    store.setEnabled(guildId, 'tickets', false);
+    await handleTicketUI(button, store, async () => {
+      calls++;
+    });
+    assert.match(replies[0].content, /disabled/);
+    store.setEnabled(guildId, 'tickets', true);
+    await handleTicketUI(button, store, async () => {
+      calls++;
+    });
+    assert.match(replies[1].content, /outdated/);
+    assert.equal(calls, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test('reopen preserves the one-open-ticket constraint and panel records survive reopen', () => {
+  const store = new SettingsStore(':memory:');
+  try {
+    store.configureTickets(guildId, channelId, staffId);
+    store.savePanel(guildId, channelId, staffId);
+    store.addTicket(guildId, channelId, ownerId);
+    store.closeTicket(guildId, channelId);
+    store.addTicket(guildId, staffId, ownerId);
+    assert.throws(() => store.reopenTicket(guildId, channelId));
+    store.closeTicket(guildId, staffId);
+    store.reopenTicket(guildId, channelId);
+    assert.equal(store.openTicket(guildId, ownerId).channel_id, channelId);
+    assert.equal(store.ticketConfig(guildId).panel_message_id, staffId);
+  } finally {
+    store.close();
+  }
+});
