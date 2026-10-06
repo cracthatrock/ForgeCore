@@ -69,6 +69,27 @@ export class SettingsStore {
       .run(options, id(guildId));
   }
 
+  saveTicketDesk(
+    guildId: string,
+    categoryId: string,
+    staffRoleId: string,
+    options: string,
+    panel?: { channelId: string; messageId: string },
+  ) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.configureTickets(guildId, categoryId, staffRoleId);
+      this.saveTicketOptions(guildId, options);
+      if (panel) {
+        this.savePanel(guildId, panel.channelId, panel.messageId);
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
   saveTicketSnapshot(
     guildId: string,
     channelId: string,

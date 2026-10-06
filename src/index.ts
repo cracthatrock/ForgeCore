@@ -5,6 +5,7 @@ import { createRegistry } from './registry.js';
 import { createDispatcher } from './dispatch.js';
 import { extensions } from './extensions/index.js';
 import { dispatchTicketUI } from './extensions/tickets.js';
+import { startDashboard } from './dashboard/server.js';
 
 let config;
 try {
@@ -32,9 +33,13 @@ client.on(Events.InteractionCreate, (interaction) => {
     }
   })();
 });
-client.once(Events.ClientReady, () =>
-  console.log(`ForgeCore online with ${registry.commands.size} commands.`),
-);
+let dashboard: ReturnType<typeof startDashboard> | undefined;
+client.once(Events.ClientReady, () => {
+  console.log(`ForgeCore online with ${registry.commands.size} commands.`);
+  if (process.env.DASHBOARD_ENABLED === 'true') {
+    dashboard = startDashboard(client, store, registry);
+  }
+});
 client.on(Events.Error, () =>
   console.error('Discord client error; check connection and configuration.'),
 );
@@ -44,6 +49,7 @@ function stop() {
     return;
   }
   stopping = true;
+  dashboard?.close();
   client.destroy();
   store.close();
 }

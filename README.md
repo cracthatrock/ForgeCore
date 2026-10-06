@@ -39,7 +39,7 @@ Guilds intent by default; optional Message Content Intent for on-demand ticket t
 
 Run `npm test`, `npm run check`, `npm run build` and `npm run format:check`. Run `npm run format` to apply consistent two-space indentation. Production source uses strict TypeScript; JavaScript test doubles exercise runtime validation. CI repeats these on Node 24. Integration checks: verify non-admin cannot configure modules, disabling example affects only one server, restart preserves settings, and re-enable restores hello.
 
-Implemented: ticket module. Next: welcome module with explicitly required intent; Discord OAuth dashboard with server permission rechecks and CSRF protections; constrained command builder. None of these later features is implemented yet.
+Implemented: ticket module and Discord OAuth dashboard. Next: welcome module with explicitly required intent and constrained command builder.
 
 Sources: https://discordjs.guide/legacy/app-creation/creating-commands and https://discordjs.guide/legacy/popular-topics/permissions-extended
 
@@ -64,7 +64,25 @@ Run `/ticket setup` without options to open the private setup wizard. Select you
 
 Members click **Get support**, enter a subject and description, and receive a private ticket with a status card. Staff use **Claim** or **Unclaim**; the assigned member is shown on the card. **Close** asks for confirmation. Closed tickets offer **Reopen** (staff only) and **Export transcript**. Controls use persistent ticket records and continue to work after a restart. Setup drafts expire on restart. Republishing makes old panels inactive. Reopening is blocked if the owner has another open ticket.
 
-The previous `/ticket setup category:... staff:...` still configures the command-only flow; use the wizard to publish a panel. Existing tickets remain accessible through slash commands. The wizard uses existing channels and roles; create those in Discord before running it. There is no web dashboard yet.
+The previous `/ticket setup category:... staff:...` still configures the command-only flow; use the wizard or dashboard to publish a panel. Existing tickets remain accessible through slash commands. The wizard uses existing channels and roles; create those in Discord before running it.
+
+## Server dashboard
+
+The dashboard runs in the bot process and uses its existing SQLite settings. No separate database or frontend build is needed. Run from the ForgeCore directory so the static `dashboard/` assets are available.
+
+1. In your Discord application’s **OAuth2 → Redirects**, register `http://localhost:4190/auth/callback` exactly and save changes.
+2. Add `DISCORD_CLIENT_SECRET` to `.env` using your application’s OAuth2 client secret. This is separate from the bot token; never commit either.
+3. Set `DASHBOARD_ENABLED=true`, `DASHBOARD_URL=http://localhost:4190`, `DASHBOARD_PORT=4190` and `DASHBOARD_HOST=127.0.0.1`.
+4. Build and restart the bot, then open `http://localhost:4190`. Sign in with Discord. The app requests only `identify` and `guilds` through the [authorization code flow](https://github.com/discord/discord-api-docs/blob/main/developers/topics/oauth2.mdx).
+5. Select a server where you have Manage Server permission and the bot is installed. Configure routing, appearance, intake questions and a private archive, with live panel and ticket previews.
+6. **Save settings** updates the settings used by new tickets. **Publish panel** additionally sends a new public support panel to your chosen Discord channel and makes the previous panel inactive. Existing tickets keep their snapshots. The selected panel destination is persisted when published.
+7. Use **Extensions** to enable or disable installed modules for that server. Core administration cannot be disabled. Disabling tickets also disables ticket interaction controls until re-enabled.
+
+The server rechecks your Discord membership and Manage Server permission for server requests, validates channel and role ownership, checks bot permissions and role hierarchy, and reuses private-archive validation. Saves require a session CSRF token and the configured origin. Tokens remain in server memory; browser cookies are HttpOnly, SameSite=Lax and Secure on HTTPS. Login sessions expire after at most one hour and disappear on restart. No OAuth refresh tokens are stored. The dashboard has request size, timeout and per-address rate limits. Preview text is rendered as text, not HTML; it approximates Discord embeds rather than interpreting Discord Markdown.
+
+Local access is the default. Public hosting needs a persistent Node process and durable SQLite storage, an HTTPS reverse proxy, the matching HTTPS `DASHBOARD_URL` and registered callback, and an appropriate `DASHBOARD_HOST`. Do not expose the local HTTP configuration publicly. The server checks Host against the configured origin; your proxy must preserve that host. Sessions and operation locks are process-local: run one instance. OAuth errors such as `invalid oauth2_redirect_uri` mean the registered callback and requested callback differ.
+
+Source layout: `src/dashboard/server.ts` handles OAuth and authorized settings routes, `src/dashboard/validation.ts` validates form data, and `dashboard/` contains the responsive frontend. Automated dashboard checks use synthetic OAuth responses and Discord objects; actual login and publishing must be checked with your own development server.
 
 ## Customizing your support desk
 

@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ForgeCore • Server dashboard</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="/"
+        >F<span>ForgeCore<small>YOUR SERVER. YOUR WAY.</small></span></a
+      >
+      <div class="server-picker">
+        <label for="guild">YOUR SERVER</label
+        ><select id="guild" disabled>
+          <option>Sign in to select a server</option>
+        </select>
+      </div>
+      <nav aria-label="Dashboard sections">
+        <button class="nav active" data-tab="tickets">▣ <span>Support desk</span></button
+        ><button class="nav" data-tab="extensions">◇ <span>Extensions</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <span class="dot"></span> Open source. Built to extend.
+        <p>ForgeCore / Control room</p>
+      </div>
+    </aside>
+    <main>
+      <header>
+        <span class="breadcrumb"
+          >Workspace <span>/</span> <b id="server-name">Server dashboard</b></span
+        >
+        <div>
+          <span id="user"></span
+          ><a id="login" class="button secondary" href="/auth/login">Connect Discord</a
+          ><button id="logout" class="secondary" hidden>Sign out</button>
+        </div>
+      </header>
+      <div id="notice" role="status" aria-live="polite"></div>
+      <section id="welcome" class="welcome">
+        <span class="eyebrow">WELCOME TO YOUR CONTROL ROOM</span>
+        <h1>A better home for your bot.</h1>
+        <p>
+          Build a support experience that feels like your community. Connect Discord to
+          manage servers where you have Manage Server permission and ForgeCore is
+          installed.
+        </p>
+        <a class="button" href="/auth/login">Connect with Discord →</a>
+        <div class="welcome-cards">
+          <article>
+            <b>01 / Configure</b>
+            <p>Choose routing, questions and archive destinations.</p>
+          </article>
+          <article>
+            <b>02 / Make it yours</b>
+            <p>Customize your embeds and see changes as you type.</p>
+          </article>
+          <article>
+            <b>03 / Ship it</b>
+            <p>Publish your support panel directly to Discord.</p>
+          </article>
+        </div>
+      </section>
+      <div id="workspace" hidden>
+        <section id="tickets">
+          <div class="heading">
+            <div>
+              <span class="eyebrow">COMMUNITY OPERATIONS</span>
+              <h1>Support desk</h1>
+              <p>A clear path from the first question to a resolved ticket.</p>
+            </div>
+            <span class="badge">Persistent server settings</span>
+          </div>
+          <div class="workspace-grid">
+            <form id="settings">
+              <div class="tabs" role="group" aria-label="Ticket settings">
+                <button type="button" class="tab active" data-step="routing">
+                  Routing</button
+                ><button type="button" class="tab" data-step="appearance">
+                  Appearance</button
+                ><button type="button" class="tab" data-step="intake">Intake</button
+                ><button type="button" class="tab" data-step="archive">Archives</button>
+              </div>
+              <section class="card step" id="routing">
+                <span class="section-number">01</span>
+                <h2>Give every ticket a home</h2>
+                <p>Choose the channels and people that keep support moving.</p>
+                <div class="fields">
+                  <label
+                    >Open ticket category<select name="category" required></select></label
+                  ><label>Support role<select name="staff" required></select></label
+                  ><label
+                    >Support panel channel<select name="panel" required></select></label
+                  ><label
+                    >Closed ticket category<select name="closedCategory"></select
+                    ><small
+                      >Keep private permissions when moving closed tickets.</small
+                    ></label
+                  >
+                </div>
+              </section>
+              <section class="card step" id="appearance" hidden>
+                <span class="section-number">02</span>
+                <h2>Make support feel familiar</h2>
+                <p>Your colors, your voice, your community.</p>
+                <label
+                  >Panel title<input name="panelTitle" maxlength="100" required /></label
+                ><label
+                  >Panel description<textarea
+                    name="panelDescription"
+                    maxlength="1500"
+                    required
+                  ></textarea>
+                </label>
+                <div class="fields">
+                  <label>Panel color<input name="panelColor" type="color" /></label
+                  ><label
+                    >Button label<input name="buttonLabel" maxlength="80" required
+                  /></label>
+                </div>
+                <label>Footer<input name="footer" maxlength="200" required /></label>
+                <hr />
+                <label
+                  >Ticket title<input
+                    name="ticketTitle"
+                    maxlength="100"
+                    required /></label
+                ><label
+                  >Ticket welcome message<textarea
+                    name="ticketMessage"
+                    maxlength="1500"
+                    required
+                  ></textarea></label
+                ><label>Ticket color<input name="ticketColor" type="color" /></label>
+              </section>
+              <section class="card step" id="intake" hidden>
+                <span class="section-number">03</span>
+                <h2>Start with the right questions</h2>
+                <p>Collect the context your team needs, or open tickets immediately.</p>
+                <label class="switch"
+                  ><input name="formEnabled" type="checkbox" /> Ask questions before
+                  opening a ticket</label
+                ><label
+                  >Form title<input name="formTitle" maxlength="45" required /></label
+                ><label
+                  >Questions<textarea
+                    name="questions"
+                    rows="6"
+                    maxlength="500"
+                    required
+                  ></textarea
+                  ><small
+                    >One question per line: required|short|Your question<br />Or
+                    optional|paragraph|Tell us more. Add 1–5 questions.</small
+                  ></label
+                >
+              </section>
+              <section class="card step" id="archive" hidden>
+                <span class="section-number">04</span>
+                <h2>Keep the conversation on record</h2>
+                <p>Save transcript copies in a private staff channel.</p>
+                <label
+                  >Transcript archive channel<select name="transcriptChannel"></select
+                ></label>
+                <div class="hint">
+                  Full transcripts need Message Content Intent enabled for the bot. Public
+                  archive channels are rejected when you save.
+                </div>
+                <p class="muted">
+                  Existing tickets retain their original settings. Transcripts include up
+                  to the newest 1,000 available messages.
+                </p>
+              </section>
+              <div class="save-bar">
+                <span id="save-status">Settings apply to new tickets.</span>
+                <div>
+                  <button type="button" id="save" class="secondary">Save settings</button
+                  ><button type="submit" id="publish">Publish panel →</button>
+                </div>
+              </div>
+            </form>
+            <aside class="preview-column">
+              <div class="preview-label">LIVE PREVIEW <span>Discord embed</span></div>
+              <div class="discord-preview">
+                <div class="bot-line">
+                  <span class="bot-avatar">F</span><b>ForgeCore</b
+                  ><span class="bot-badge">APP</span><small>Today</small>
+                </div>
+                <article id="preview-panel" class="embed">
+                  <h3 id="preview-title"></h3>
+                  <p id="preview-description"></p>
+                  <small id="preview-footer"></small>
+                </article>
+                <button class="discord-button" type="button" id="preview-button" disabled>
+                  Get support
+                </button>
+                <div class="preview-divider">INSIDE A NEW TICKET</div>
+                <article id="preview-ticket" class="embed">
+                  <h3 id="preview-ticket-title"></h3>
+                  <p id="preview-ticket-message"></p>
+                  <div class="ticket-meta">
+                    <span>STATUS<b>Open</b></span
+                    ><span>ASSIGNED TO<b>Unclaimed</b></span>
+                  </div>
+                </article>
+              </div>
+              <div class="hint">
+                Preview updates as you edit. Publishing sends a new panel to your selected
+                channel and makes the previous panel inactive.
+              </div>
+            </aside>
+          </div>
+        </section>
+        <section id="extensions" hidden>
+          <div class="heading">
+            <div>
+              <span class="eyebrow">BUILD YOUR BOT</span>
+              <h1>Extensions</h1>
+              <p>Turn trusted modules on or off for this server.</p>
+            </div>
+          </div>
+          <div id="extension-list" class="extension-grid"></div>
+          <div class="hint">
+            Extensions are installed through reviewed TypeScript code. Core administration
+            stays enabled.
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
