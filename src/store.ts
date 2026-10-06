@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import type { WelcomeOptions } from './extensions/welcome.js';
 
 const id = (value: string) => {
   if (!/^\d{17,20}$/.test(value)) {
@@ -37,6 +38,9 @@ export class SettingsStore {
        );`,
     );
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS welcome_config (
+        guild_id TEXT PRIMARY KEY, options_json TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS ticket_config (
         guild_id TEXT PRIMARY KEY, category_id TEXT NOT NULL, staff_role_id TEXT NOT NULL
       );
@@ -61,6 +65,21 @@ export class SettingsStore {
     migrate('ticket_config', 'options_json', 'TEXT');
     migrate('tickets', 'options_json', 'TEXT');
     migrate('tickets', 'answers_json', 'TEXT');
+  }
+
+  welcomeConfig(guildId: string): WelcomeOptions | undefined {
+    const row = this.db
+      .prepare('SELECT options_json FROM welcome_config WHERE guild_id=?')
+      .get(id(guildId));
+    return row ? (JSON.parse(String(row.options_json)) as WelcomeOptions) : undefined;
+  }
+
+  saveWelcomeConfig(guildId: string, options: WelcomeOptions) {
+    this.db
+      .prepare(
+        'INSERT INTO welcome_config VALUES (?,?) ON CONFLICT(guild_id) DO UPDATE SET options_json=excluded.options_json',
+      )
+      .run(id(guildId), JSON.stringify(options));
   }
 
   saveTicketOptions(guildId: string, options: string) {

@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const form = $('settings');
+const welcomeForm = $('welcome-settings');
 let csrf;
 let guild;
 let loading = false;
@@ -24,8 +25,8 @@ async function api(path, data) {
   }
   return result;
 }
-function options(name, items, selected, empty) {
-  const select = form.elements.namedItem(name);
+function options(name, items, selected, empty, target = form) {
+  const select = target.elements.namedItem(name);
   select.replaceChildren(new Option(empty, ''));
   for (const item of items) {
     select.add(new Option(item.name, item.id));
@@ -63,6 +64,18 @@ async function loadGuild() {
     $('server-name').textContent = data.name;
     const categories = data.channels.filter((c) => c.type === 4);
     const text = data.channels.filter((c) => c.type === 0);
+    options('channel', text, data.welcome.channel, 'No welcome message', welcomeForm);
+    options('role', data.roles, data.welcome.role, 'No join role', welcomeForm);
+    for (const name of ['title', 'message', 'footer']) {
+      welcomeForm.elements.namedItem(name).value = data.welcome[name];
+    }
+    welcomeForm.elements.namedItem('color').value =
+      `#${data.welcome.color.toString(16).padStart(6, '0')}`;
+    welcomeForm.elements.namedItem('mention').checked = data.welcome.mention;
+    $('welcome-runtime').textContent = data.welcomeReady
+      ? 'Join events connected'
+      : 'Server Members Intent needed';
+    welcomePreview();
     options('category', categories, data.config?.category_id, 'Choose a category');
     options('staff', data.roles, data.config?.staff_role_id, 'Choose a role');
     options('panel', text, data.config?.panel_channel_id, 'Choose a channel');
@@ -107,6 +120,7 @@ async function loadGuild() {
           core: 'Essential bot commands and server administration.',
           tickets: 'Private support tickets, panels, intake forms and transcripts.',
           example: 'A simple command that shows how extensions fit together.',
+          welcome: 'Custom greetings and basic join roles for new community members.',
         }[extension.id] || 'Trusted extension installed on this bot.';
       const button = document.createElement('button');
       button.textContent = extension.locked
@@ -204,8 +218,9 @@ for (const button of document.querySelectorAll('[data-step]')) {
 }
 for (const button of document.querySelectorAll('[data-tab]')) {
   button.onclick = () => {
-    for (const section of ['tickets', 'extensions']) {
-      $(section).hidden = section !== button.dataset.tab;
+    for (const section of ['tickets', 'extensions', 'welcome']) {
+      $(section === 'welcome' ? 'welcome-module' : section).hidden =
+        section !== button.dataset.tab;
     }
     for (const nav of document.querySelectorAll('.nav')) {
       nav.classList.toggle('active', nav === button);
@@ -250,3 +265,58 @@ async function init() {
   }
 }
 void init();
+
+function welcomePreview() {
+  const values = {
+    user: '@new-member',
+    username: 'new-member',
+    server: $('server-name').textContent,
+    count: '128',
+  };
+  for (const name of ['title', 'message', 'footer']) {
+    $(`welcome-preview-${name}`).textContent = welcomeForm.elements
+      .namedItem(name)
+      .value.replace(/\{(user|username|server|count)\}/g, (_, key) => values[key]);
+  }
+  $('welcome-preview').style.borderLeftColor =
+    welcomeForm.elements.namedItem('color').value;
+}
+welcomeForm.noValidate = true;
+welcomeForm.addEventListener('input', () => {
+  welcomePreview();
+  $('welcome-save-status').textContent = 'You have unsaved changes.';
+});
+async function saveWelcome(test) {
+  if (loading || !guild) {
+    return;
+  }
+  loading = true;
+  $('welcome-save').disabled = true;
+  $('welcome-test').disabled = true;
+  $('guild').disabled = true;
+  try {
+    const data = Object.fromEntries(new FormData(welcomeForm));
+    data.mention = welcomeForm.elements.namedItem('mention').checked;
+    await api(`/api/guilds/${guild}/${test ? 'welcome-test' : 'welcome'}`, data);
+    notice(
+      test
+        ? 'Test welcome sent to your chosen channel. No role was assigned.'
+        : 'Welcome settings saved. Enable the welcome extension for live joins.',
+    );
+    if (!test) {
+      $('welcome-save-status').textContent = 'Saved just now';
+    }
+  } catch (error) {
+    notice(error.message, true);
+  } finally {
+    loading = false;
+    $('welcome-save').disabled = false;
+    $('welcome-test').disabled = false;
+    $('guild').disabled = false;
+  }
+}
+welcomeForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  void saveWelcome(false);
+});
+$('welcome-test').onclick = () => saveWelcome(true);

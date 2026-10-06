@@ -20,6 +20,7 @@
       </div>
       <nav aria-label="Dashboard sections">
         <button class="nav active" data-tab="tickets">▣ <span>Support desk</span></button
+        ><button class="nav" data-tab="welcome">✦ <span>Welcome</span></button
         ><button class="nav" data-tab="extensions">◇ <span>Extensions</span></button>
       </nav>
       <div class="sidebar-bottom">
@@ -209,6 +210,86 @@
               <div class="hint">
                 Preview updates as you edit. Publishing sends a new panel to your selected
                 channel and makes the previous panel inactive.
+              </div>
+            </aside>
+          </div>
+        </section>
+        <section id="welcome-module" hidden>
+          <div class="heading">
+            <div>
+              <span class="eyebrow">FIRST IMPRESSIONS</span>
+              <h1>A warm welcome</h1>
+              <p>Make every new member feel like they belong.</p>
+            </div>
+            <span class="badge" id="welcome-runtime">Checking join events</span>
+          </div>
+          <div class="workspace-grid">
+            <form id="welcome-settings" class="card">
+              <span class="section-number">01</span>
+              <h2>Open the door to your community</h2>
+              <p>
+                Choose a destination, write your greeting, and optionally assign a member
+                role.
+              </p>
+              <div class="fields">
+                <label
+                  >Welcome channel<select name="channel"></select
+                  ><small>Leave empty for role assignment only.</small></label
+                ><label
+                  >Optional join role<select name="role"></select
+                  ><small
+                    >Basic member roles only. Manage Roles permission required.</small
+                  ></label
+                >
+              </div>
+              <label>Embed title<input name="title" maxlength="100" required /></label>
+              <label
+                >Welcome message<textarea
+                  name="message"
+                  maxlength="1500"
+                  rows="5"
+                  required
+                ></textarea
+                ><small
+                  >Use {user}, {username}, {server} and {count} to personalize your
+                  greeting.</small
+                ></label
+              >
+              <div class="fields">
+                <label>Embed color<input type="color" name="color" /></label
+                ><label>Footer<input name="footer" maxlength="200" required /></label>
+              </div>
+              <label class="switch"
+                ><input type="checkbox" name="mention" /> Mention the new member</label
+              >
+              <div class="save-bar">
+                <span id="welcome-save-status">Applies to future joins.</span>
+                <div>
+                  <button type="button" class="secondary" id="welcome-test">
+                    Send test message</button
+                  ><button type="submit" id="welcome-save">Save welcome →</button>
+                </div>
+              </div>
+            </form>
+            <aside class="preview-column">
+              <div class="preview-label">
+                LIVE PREVIEW <span>Example new member</span>
+              </div>
+              <div class="discord-preview">
+                <div class="bot-line">
+                  <span class="bot-avatar">F</span><b>ForgeCore</b
+                  ><span class="bot-badge">APP</span><small>Today</small>
+                </div>
+                <article id="welcome-preview" class="embed">
+                  <h3 id="welcome-preview-title"></h3>
+                  <p id="welcome-preview-message"></p>
+                  <small id="welcome-preview-footer"></small>
+                </article>
+              </div>
+              <div class="hint">
+                Test messages use your Discord account as the example member and never
+                assign a role. Live welcomes skip bots. Join roles wait until membership
+                screening is complete.
               </div>
             </aside>
           </div>

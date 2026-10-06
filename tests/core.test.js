@@ -54,7 +54,7 @@ test('settings isolate servers and survive reopening', () => {
   }
 });
 test('registry rejects duplicate extension and command definitions', () => {
-  assert.equal(createRegistry(extensions).definitions.length, 4);
+  assert.equal(createRegistry(extensions).definitions.length, 5);
   assert.throws(() => createRegistry([extensions[0], extensions[0]]));
   assert.throws(() =>
     createRegistry([

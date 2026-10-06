@@ -172,10 +172,31 @@ test('OAuth dashboard rejects unauthenticated writes, invalid state, CSRF and cr
     assert.equal((await save(input(), 'publish')).status, 200);
     assert.equal(published, 1);
     assert.equal(store.ticketConfig(guildId).panel_message_id, '623456789012345678');
+    const welcome = {
+      channel: panel.id,
+      role: null,
+      title: 'Welcome {username}',
+      message: 'Welcome to {server}',
+      footer: 'Hello',
+      color: '#b6fa6a',
+      mention: false,
+    };
+    assert.equal((await save(welcome, 'welcome')).status, 200);
+    assert.equal(store.welcomeConfig(guildId).title, welcome.title);
+    assert.equal(
+      (await save({ ...welcome, channel: '723456789012345678' }, 'welcome')).status,
+      400,
+    );
+    assert.equal(store.welcomeConfig(guildId).channel, panel.id);
+    assert.equal(
+      (await save({ ...welcome, role: '223456789012345678' }, 'welcome')).status,
+      400,
+    );
     allowed = false;
     assert.equal((await request(guildId)).status, 403);
     assert.equal((await save(input(), 'publish')).status, 403);
     assert.equal(published, 1);
+    assert.equal((await save(welcome, 'welcome')).status, 403);
     response = await fetch(`${base}/api/session`, { headers: { Cookie: oldCookie } });
     assert.equal((await response.json()).user, null);
     const logout = await fetch(`${base}/auth/logout`, {

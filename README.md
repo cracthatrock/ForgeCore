@@ -33,13 +33,26 @@ Use interaction.guildId for all server-owned records. Never trust a client-suppl
 
 ## Security and operational limits
 
-Guilds intent by default; optional Message Content Intent for on-demand ticket transcripts. Message bodies are not stored in SQLite. User-facing replies are ephemeral with mentions disabled. Errors log command/server metadata, not raw exceptions, tokens or messages. SQL uses prepared statements. Cooldowns are process-local and reset on restart: run one instance for this milestone. SQLite settings persist in data/forge.sqlite; keep the database and WAL files on durable storage and back up consistently. This is a tested foundation, not a claim of complete production security.
+Guilds intent by default; optional Message Content Intent for on-demand ticket transcripts and Server Members Intent for welcome events. Message bodies are not stored in SQLite. Command replies are ephemeral with mentions disabled; live welcome messages may mention only the joining member. Errors log command/server metadata, not raw exceptions, tokens or messages. SQL uses prepared statements. Cooldowns are process-local and reset on restart: run one instance for this milestone. SQLite settings persist in data/forge.sqlite; keep the database and WAL files on durable storage and back up consistently. This is a tested foundation, not a claim of complete production security.
 
 ## Checks and next milestones
 
 Run `npm test`, `npm run check`, `npm run build` and `npm run format:check`. Run `npm run format` to apply consistent two-space indentation. Production source uses strict TypeScript; JavaScript test doubles exercise runtime validation. CI repeats these on Node 24. Integration checks: verify non-admin cannot configure modules, disabling example affects only one server, restart preserves settings, and re-enable restores hello.
 
-Implemented: ticket module and Discord OAuth dashboard. Next: welcome module with explicitly required intent and constrained command builder.
+Implemented: ticket and welcome modules with Discord OAuth dashboard. Next: constrained command builder.
+
+## Welcome module
+
+1. Enable **Server Members Intent** under **Bot → Privileged Gateway Intents** in the Discord Developer Portal. Set `WELCOME_MEMBERS=true` in `.env`, build and restart. [Discord requires the privileged Guild Members intent for join events](https://github.com/discord/discord-api-docs/blob/main/developers/events/gateway.mdx).
+2. Open **Welcome** in the dashboard. Choose a text channel, customize title, message, color and footer, and optionally choose a basic join role. Leaving the channel empty enables role-only setup; leaving the role empty enables message-only setup.
+3. Supported placeholders: `{user}` (member mention), `{username}`, `{server}` and `{count}`. Member count reflects Discord’s current server count, not an all-time join counter. The browser preview uses an example member and count; **Send test message** uses your account and posts to the chosen channel without assigning a role or saving settings. `/welcome` gives managers an ephemeral preview of saved settings.
+4. Press **Save welcome**. Ensure the **welcome** extension is enabled under **Extensions**. Settings persist across restarts and apply to future joins; existing members are not processed retroactively.
+
+The bot needs View Channel, Send Messages and Embed Links for greetings. Join roles also require the bot’s Manage Roles permission. A configuring manager needs Manage Roles, and the role must be below both their highest role and the bot’s highest role (the server owner is exempt from their own hierarchy check). Managed, everyone, configured ticket-support and elevated roles are rejected. The permission allowlist permits basic conversation and voice permissions; administrative, moderation and unknown permissions are denied. Effective channel access granted by a basic role still depends on your server’s channel overwrites, so choose a dedicated member role.
+
+Live events skip bots. Membership screening defers role assignment until the member is no longer pending; the welcome message is sent once on arrival, not again when screening completes. Runtime role checks reject roles that become elevated after setup. Turning off the extension stops greetings and join roles. Failures log only the server ID and a generic diagnostic; a failed role assignment does not prevent the greeting. There is no join-event replay, durable retry queue, leave-message feature or retroactive role assignment in this milestone.
+
+Live checklist: send a test greeting, join with a second human account, confirm only the configured member role is assigned, test membership screening if enabled, then disable the extension and confirm subsequent joins receive neither action. Automated tests use Discord doubles and isolated browser fixtures; a real join still needs your development server.
 
 Sources: https://discordjs.guide/legacy/app-creation/creating-commands and https://discordjs.guide/legacy/popular-topics/permissions-extended
 

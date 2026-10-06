@@ -6,6 +6,7 @@ import { createDispatcher } from './dispatch.js';
 import { extensions } from './extensions/index.js';
 import { dispatchTicketUI } from './extensions/tickets.js';
 import { startDashboard } from './dashboard/server.js';
+import { handleWelcome } from './extensions/welcome.js';
 
 let config;
 try {
@@ -21,11 +22,24 @@ const registry = createRegistry(extensions);
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    ...(config.welcomeMembers ? [GatewayIntentBits.GuildMembers] : []),
     ...(config.ticketTranscripts ? [GatewayIntentBits.MessageContent] : []),
   ],
   allowedMentions: { parse: [] },
 });
 const dispatch = createDispatcher({ registry, store });
+client.on(Events.GuildMemberAdd, (member) => {
+  void handleWelcome(member, store).catch(() =>
+    console.error('Welcome event failed; check server configuration.'),
+  );
+});
+client.on(Events.GuildMemberUpdate, (before, member) => {
+  if (before.pending && !member.pending) {
+    void handleWelcome(member, store, true).catch(() =>
+      console.error('Welcome role event failed; check server configuration.'),
+    );
+  }
+});
 client.on(Events.InteractionCreate, (interaction) => {
   void (async () => {
     if (!(await dispatchTicketUI(interaction, store))) {

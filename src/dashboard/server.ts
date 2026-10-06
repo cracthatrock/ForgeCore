@@ -2,13 +2,24 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { ChannelType, PermissionFlagsBits, type Client } from 'discord.js';
+import {
+  ChannelType,
+  GatewayIntentBits,
+  PermissionFlagsBits,
+  type Client,
+} from 'discord.js';
 import type { SettingsStore } from '../store.js';
 import type { Registry } from '../types.js';
 import { readOptions } from '../extensions/ticket-options.js';
 import { panelView } from '../extensions/ticket-setup.js';
 import { validateArchive } from '../extensions/ticket-archive.js';
 import { canManage, validateSettings } from './validation.js';
+import {
+  defaultWelcome,
+  validateWelcome,
+  validateWelcomeTargets,
+  welcomeView,
+} from '../extensions/welcome.js';
 
 interface Session {
   expires: number;
@@ -262,7 +273,7 @@ export function startDashboard(client: Client, store: SettingsStore, registry: R
       return;
     }
     const match = url.pathname.match(
-      /^\/api\/guilds\/(\d{17,20})(?:\/(tickets|publish|extensions))?$/,
+      /^\/api\/guilds\/(\d{17,20})(?:\/(tickets|publish|extensions|welcome|welcome-test))?$/,
     );
     if (!match) {
       reply(res, 404, { error: 'Not found.' });
@@ -286,6 +297,8 @@ export function startDashboard(client: Client, store: SettingsStore, registry: R
         name: guild.name,
         config: config || null,
         options: readOptions(config?.options_json),
+        welcome: store.welcomeConfig(guild.id) || structuredClone(defaultWelcome),
+        welcomeReady: client.options.intents.has(GatewayIntentBits.GuildMembers),
         channels: [...channels.values()]
           .filter(
             (c) =>
@@ -314,6 +327,65 @@ export function startDashboard(client: Client, store: SettingsStore, registry: R
     locks.add(guild.id);
     try {
       const input = await body(req);
+      if (match[2] === 'welcome' || match[2] === 'welcome-test') {
+        let options;
+        try {
+          options = validateWelcome(input);
+        } catch (error) {
+          reply(res, 400, {
+            error: error instanceof Error ? error.message : 'Invalid welcome settings.',
+          });
+          return;
+        }
+        const problem = await validateWelcomeTargets(
+          guild,
+          options,
+          store.ticketConfig(guild.id)?.staff_role_id,
+        );
+        if (problem) {
+          reply(res, 400, { error: problem });
+          return;
+        }
+        const current = await guild.members.fetch({ user: session.user.id, force: true });
+        if (
+          !current.permissions.has(PermissionFlagsBits.ManageGuild) ||
+          (options.role && !current.permissions.has(PermissionFlagsBits.ManageRoles))
+        ) {
+          reply(res, 403, {
+            error:
+              'Manage Server is required; configuring a join role also requires Manage Roles.',
+          });
+          return;
+        }
+        if (options.role && guild.ownerId !== current.id) {
+          const role = await guild.roles.fetch(options.role);
+          if (!role || role.comparePositionTo(current.roles.highest) >= 0) {
+            reply(res, 403, {
+              error: 'The join role must be below your own highest role.',
+            });
+            return;
+          }
+        }
+        if (match[2] === 'welcome-test') {
+          if (!options.channel) {
+            reply(res, 400, { error: 'Choose a channel to send a test message.' });
+            return;
+          }
+          const channel = await guild.channels.fetch(options.channel);
+          if (channel?.type !== ChannelType.GuildText) {
+            throw new Error('Channel unavailable');
+          }
+          await channel.send({
+            ...welcomeView(current, options, true),
+            content: 'Welcome preview • No join role assigned.',
+          });
+          reply(res, 200, { ok: true });
+          return;
+        }
+        store.saveWelcomeConfig(guild.id, options);
+        reply(res, 200, { ok: true });
+        return;
+      }
       if (match[2] === 'extensions') {
         const data = input as { id?: string; enabled?: boolean };
         if (
