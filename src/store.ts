@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { WelcomeOptions } from './extensions/welcome.js';
+import type { CustomRecord, CustomReply } from './extensions/custom-commands.js';
 
 const id = (value: string) => {
   if (!/^\d{17,20}$/.test(value)) {
@@ -38,6 +39,10 @@ export class SettingsStore {
        );`,
     );
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS custom_commands (
+        guild_id TEXT NOT NULL, name TEXT NOT NULL, draft_json TEXT NOT NULL,
+        published_json TEXT, command_id TEXT, PRIMARY KEY (guild_id, name)
+      );
       CREATE TABLE IF NOT EXISTS welcome_config (
         guild_id TEXT PRIMARY KEY, options_json TEXT NOT NULL
       );
@@ -72,6 +77,59 @@ export class SettingsStore {
       .prepare('SELECT options_json FROM welcome_config WHERE guild_id=?')
       .get(id(guildId));
     return row ? (JSON.parse(String(row.options_json)) as WelcomeOptions) : undefined;
+  }
+
+  customCommands(guildId: string): CustomRecord[] {
+    return this.db
+      .prepare('SELECT * FROM custom_commands WHERE guild_id=? ORDER BY name')
+      .all(id(guildId))
+      .map((row) => ({
+        draft: JSON.parse(String(row.draft_json)),
+        published: row.published_json ? JSON.parse(String(row.published_json)) : null,
+        commandId: row.command_id ? String(row.command_id) : null,
+      }));
+  }
+
+  customCommand(guildId: string, name: string) {
+    return this.customCommands(guildId).find((record) => record.draft.name === name);
+  }
+
+  saveCustomDraft(guildId: string, reply: CustomReply) {
+    if (
+      !this.customCommand(guildId, reply.name) &&
+      this.customCommands(guildId).length >= 25
+    ) {
+      throw new Error('This server already has 25 saved commands.');
+    }
+    this.db
+      .prepare(
+        'INSERT INTO custom_commands (guild_id,name,draft_json) VALUES (?,?,?) ON CONFLICT(guild_id,name) DO UPDATE SET draft_json=excluded.draft_json',
+      )
+      .run(id(guildId), reply.name, JSON.stringify(reply));
+  }
+
+  publishCustom(guildId: string, reply: CustomReply, commandId: string) {
+    this.db
+      .prepare(
+        'UPDATE custom_commands SET published_json=?,command_id=? WHERE guild_id=? AND name=?',
+      )
+      .run(JSON.stringify(reply), id(commandId), id(guildId), reply.name);
+  }
+
+  unpublishCustom(guildId: string, name: string) {
+    this.db
+      .prepare(
+        'UPDATE custom_commands SET published_json=NULL,command_id=NULL WHERE guild_id=? AND name=?',
+      )
+      .run(id(guildId), name);
+  }
+
+  deleteCustomDraft(guildId: string, name: string) {
+    this.db
+      .prepare(
+        'DELETE FROM custom_commands WHERE guild_id=? AND name=? AND published_json IS NULL',
+      )
+      .run(id(guildId), name);
   }
 
   saveWelcomeConfig(guildId: string, options: WelcomeOptions) {

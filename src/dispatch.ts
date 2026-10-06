@@ -2,6 +2,7 @@ import type { Interaction } from 'discord.js';
 import type { Registry, Logger } from './types.js';
 import type { SettingsStore } from './store.js';
 import { MessageFlags } from 'discord.js';
+import { CustomRoleError, resolveCustomCommand } from './extensions/custom-commands.js';
 
 export function createDispatcher({
   registry,
@@ -33,7 +34,9 @@ export function createDispatcher({
         return await reply('Use this command in a server.');
       }
 
-      const command = registry.commands.get(interaction.commandName);
+      const command =
+        registry.commands.get(interaction.commandName) ||
+        (await resolveCustomCommand(interaction, store));
       if (!command) {
         return await reply(
           'Unknown command. Ask the owner to update command registration.',
@@ -72,10 +75,15 @@ export function createDispatcher({
       }
       cooldowns.set(key, time + command.cooldownMs);
 
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      await interaction.deferReply(
+        command.ephemeral === false ? {} : { flags: MessageFlags.Ephemeral },
+      );
 
       await command.execute({ interaction, store, registry });
-    } catch {
+    } catch (error) {
+      if (error instanceof CustomRoleError) {
+        return await reply('You need the configured role to use this command.');
+      }
       // Log metadata only: never tokens, message content or raw provider errors.
       logger.error('Command failed', {
         command: interaction.commandName,

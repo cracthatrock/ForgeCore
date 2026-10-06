@@ -589,3 +589,25 @@ hr {
     padding: 18px;
   }
 }
+
+.command-editor {
+  margin-top: 25px;
+}
+.preview-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.link-preview {
+  padding: 9px 12px;
+  background: #414650;
+  border-radius: 5px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+#command-preview-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #ddd;
+}

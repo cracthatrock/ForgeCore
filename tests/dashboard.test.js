@@ -68,6 +68,11 @@ test('OAuth dashboard rejects unauthenticated writes, invalid state, CSRF and cr
           guildId,
           {
             id: guildId,
+            commands: {
+              create: async (data) => ({ id: '823456789012345678', name: data.name }),
+              fetch: async () => ({ name: 'rules' }),
+              delete: async () => {},
+            },
             members: {
               fetch: async () => ({ permissions: { has: () => allowed } }),
               fetchMe: async () => ({ roles: { highest: { position: 10 } } }),
@@ -172,6 +177,34 @@ test('OAuth dashboard rejects unauthenticated writes, invalid state, CSRF and cr
     assert.equal((await save(input(), 'publish')).status, 200);
     assert.equal(published, 1);
     assert.equal(store.ticketConfig(guildId).panel_message_id, '623456789012345678');
+    const draft = {
+      name: 'rules',
+      description: 'Read the rules',
+      content: 'Be kind',
+      embed: false,
+      title: '',
+      message: '',
+      footer: '',
+      color: '#b6fa6a',
+      links: '',
+      role: null,
+      cooldown: 10,
+      ephemeral: true,
+    };
+    assert.equal((await save({ ...draft, name: 'ticket' }, 'command-save')).status, 400);
+    assert.equal((await save(draft, 'command-save')).status, 200);
+    assert.equal(store.customCommand(guildId, 'rules').published, null);
+    assert.equal((await save({ name: 'rules' }, 'command-publish')).status, 200);
+    assert.equal(store.customCommand(guildId, 'rules').published.content, 'Be kind');
+    assert.equal(
+      (await save({ ...draft, content: 'New draft' }, 'command-save')).status,
+      200,
+    );
+    assert.equal(store.customCommand(guildId, 'rules').published.content, 'Be kind');
+    assert.equal((await save({ name: 'rules' }, 'command-delete')).status, 400);
+    assert.equal((await save({ name: 'rules' }, 'command-unpublish')).status, 200);
+    assert.equal((await save({ name: 'rules' }, 'command-delete')).status, 200);
+    assert.equal(store.customCommand(guildId, 'rules'), undefined);
     const welcome = {
       channel: panel.id,
       role: null,

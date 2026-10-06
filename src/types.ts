@@ -11,6 +11,7 @@ export interface CommandContext {
   registry: Registry;
 }
 export interface Command {
+  ephemeral?: boolean;
   data: { toJSON(): RESTPostAPIChatInputApplicationCommandsJSONBody };
   cooldownMs: number;
   memberPermissions?: PermissionResolvable;

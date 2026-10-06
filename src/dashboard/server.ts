@@ -14,6 +14,7 @@ import { readOptions } from '../extensions/ticket-options.js';
 import { panelView } from '../extensions/ticket-setup.js';
 import { validateArchive } from '../extensions/ticket-archive.js';
 import { canManage, validateSettings } from './validation.js';
+import { customDefinition, validateCustomReply } from '../extensions/custom-commands.js';
 import {
   defaultWelcome,
   validateWelcome,
@@ -273,7 +274,7 @@ export function startDashboard(client: Client, store: SettingsStore, registry: R
       return;
     }
     const match = url.pathname.match(
-      /^\/api\/guilds\/(\d{17,20})(?:\/(tickets|publish|extensions|welcome|welcome-test))?$/,
+      /^\/api\/guilds\/(\d{17,20})(?:\/(tickets|publish|extensions|welcome|welcome-test|command-save|command-publish|command-unpublish|command-delete))?$/,
     );
     if (!match) {
       reply(res, 404, { error: 'Not found.' });
@@ -297,6 +298,8 @@ export function startDashboard(client: Client, store: SettingsStore, registry: R
         name: guild.name,
         config: config || null,
         options: readOptions(config?.options_json),
+        customCommands: store.customCommands(guild.id),
+        reservedCommands: [...registry.commands.keys()],
         welcome: store.welcomeConfig(guild.id) || structuredClone(defaultWelcome),
         welcomeReady: client.options.intents.has(GatewayIntentBits.GuildMembers),
         channels: [...channels.values()]
@@ -327,6 +330,98 @@ export function startDashboard(client: Client, store: SettingsStore, registry: R
     locks.add(guild.id);
     try {
       const input = await body(req);
+      if (match[2]?.startsWith('command-')) {
+        const reserved = new Set(registry.commands.keys());
+        const action = match[2];
+        const name = (input as { name?: unknown } | null)?.name;
+        if (
+          typeof name !== 'string' ||
+          !/^[a-z][a-z0-9_-]{0,31}$/.test(name) ||
+          reserved.has(name)
+        ) {
+          reply(res, 400, {
+            error: 'Choose a custom command name, not a built-in name.',
+          });
+          return;
+        }
+        const record = store.customCommand(guild.id, name);
+        const current = await guild.members.fetch({ user: session.user.id, force: true });
+        if (!current.permissions.has(PermissionFlagsBits.ManageGuild)) {
+          reply(res, 403, { error: 'Manage Server is required.' });
+          return;
+        }
+        if (action === 'command-save') {
+          let data;
+          try {
+            data = validateCustomReply(input, reserved);
+          } catch (error) {
+            reply(res, 400, {
+              error: error instanceof Error ? error.message : 'Invalid command.',
+            });
+            return;
+          }
+          if (
+            data.role &&
+            (!(await guild.roles.fetch(data.role)) || data.role === guild.id)
+          ) {
+            reply(res, 400, { error: 'Choose a role in this server.' });
+            return;
+          }
+          if (!record && store.customCommands(guild.id).length >= 25) {
+            reply(res, 400, { error: 'Limit reached: 25 saved commands per server.' });
+            return;
+          }
+          store.saveCustomDraft(guild.id, data);
+        } else {
+          if (!record) {
+            reply(res, 404, { error: 'Save a draft first.' });
+            return;
+          }
+          if (action === 'command-publish') {
+            if (record.draft.role && !(await guild.roles.fetch(record.draft.role))) {
+              reply(res, 400, { error: 'The allowed role no longer exists.' });
+              return;
+            }
+            const command = await guild.commands.create(customDefinition(record.draft));
+            store.publishCustom(guild.id, record.draft, command.id);
+          } else if (action === 'command-unpublish') {
+            if (record.commandId) {
+              // Check the remote command name before deletion; never remove a built-in.
+              const remote = await guild.commands
+                .fetch(record.commandId)
+                .catch((error: unknown) => {
+                  if (
+                    error &&
+                    typeof error === 'object' &&
+                    'code' in error &&
+                    error.code === 10063
+                  ) {
+                    return null;
+                  }
+                  throw error;
+                });
+              if (remote && remote.name !== name) {
+                reply(res, 409, { error: 'Registration changed. Refresh and retry.' });
+                return;
+              }
+              if (remote) {
+                await guild.commands.delete(record.commandId);
+              }
+            }
+            store.unpublishCustom(guild.id, name);
+          } else {
+            if (record.published) {
+              reply(res, 400, {
+                error: 'Unpublish the command before deleting its draft.',
+              });
+              return;
+            }
+            store.deleteCustomDraft(guild.id, name);
+          }
+        }
+        reply(res, 200, { ok: true, commands: store.customCommands(guild.id) });
+        return;
+      }
       if (match[2] === 'welcome' || match[2] === 'welcome-test') {
         let options;
         try {

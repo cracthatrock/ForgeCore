@@ -21,6 +21,7 @@
       <nav aria-label="Dashboard sections">
         <button class="nav active" data-tab="tickets">▣ <span>Support desk</span></button
         ><button class="nav" data-tab="welcome">✦ <span>Welcome</span></button
+        ><button class="nav" data-tab="commands">⌘ <span>Commands</span></button
         ><button class="nav" data-tab="extensions">◇ <span>Extensions</span></button>
       </nav>
       <div class="sidebar-bottom">
@@ -290,6 +291,129 @@
                 Test messages use your Discord account as the example member and never
                 assign a role. Live welcomes skip bots. Join roles wait until membership
                 screening is complete.
+              </div>
+            </aside>
+          </div>
+        </section>
+        <section id="commands" hidden>
+          <div class="heading">
+            <div>
+              <span class="eyebrow">YOUR COMMUNITY’S SHORTCUTS</span>
+              <h1>Command studio</h1>
+              <p>Useful replies, built your way. No code required.</p>
+            </div>
+            <button id="command-new" type="button" class="secondary">
+              New command +
+            </button>
+          </div>
+          <div id="command-list" class="extension-grid"></div>
+          <div class="workspace-grid command-editor">
+            <form id="command-settings" class="card">
+              <span class="section-number">CREATE / EDIT</span>
+              <h2>One command. A helpful answer.</h2>
+              <p>Save a draft, review your reply, then publish to Discord.</p>
+              <div class="fields">
+                <label
+                  >Command name<input
+                    name="name"
+                    maxlength="32"
+                    placeholder="rules"
+                    required
+                  /><small
+                    >Lowercase letters, numbers, underscores and hyphens.</small
+                  ></label
+                ><label
+                  >Description<input
+                    name="description"
+                    maxlength="100"
+                    placeholder="Read our community rules"
+                    required
+                /></label>
+              </div>
+              <label
+                >Reply text<textarea
+                  name="content"
+                  maxlength="2000"
+                  placeholder="Your reply, shown above an optional embed"
+                ></textarea>
+              </label>
+              <label class="switch"
+                ><input type="checkbox" name="embed" checked /> Include an embed</label
+              >
+              <label>Embed title<input name="title" maxlength="100" /></label
+              ><label
+                >Embed description<textarea name="message" maxlength="1500"></textarea>
+              </label>
+              <div class="fields">
+                <label
+                  >Embed color<input type="color" name="color" value="#b6fa6a" /></label
+                ><label>Footer<input name="footer" maxlength="200" /></label>
+              </div>
+              <label
+                >Link buttons<textarea
+                  name="links"
+                  maxlength="3000"
+                  placeholder="Our website|https://example.com"
+                ></textarea
+                ><small>Up to five buttons. One Label|https://URL per line.</small></label
+              >
+              <div class="fields">
+                <label
+                  >Allowed role<select name="role"></select
+                  ><small
+                    >Members must have this exact role. Checked when they run the
+                    command.</small
+                  ></label
+                ><label
+                  >Cooldown in seconds<input
+                    type="number"
+                    name="cooldown"
+                    min="1"
+                    max="300"
+                    value="10"
+                /></label>
+              </div>
+              <label class="switch"
+                ><input type="checkbox" name="ephemeral" checked /> Private reply (visible
+                only to the person using it)</label
+              >
+              <div class="save-bar">
+                <span id="command-status">New draft</span>
+                <div>
+                  <button type="submit" class="secondary" id="command-save">
+                    Save draft</button
+                  ><button type="button" id="command-publish">Publish command →</button>
+                </div>
+              </div>
+              <div class="save-bar">
+                <button type="button" class="secondary" id="command-unpublish">
+                  Unpublish</button
+                ><button type="button" class="secondary" id="command-delete">
+                  Delete draft
+                </button>
+              </div>
+            </form>
+            <aside class="preview-column">
+              <div class="preview-label">
+                LIVE PREVIEW <span id="command-preview-name">/your-command</span>
+              </div>
+              <div class="discord-preview">
+                <div class="bot-line">
+                  <span class="bot-avatar">F</span><b>ForgeCore</b
+                  ><span class="bot-badge">APP</span>
+                </div>
+                <p id="command-preview-content"></p>
+                <article id="command-preview" class="embed">
+                  <h3 id="command-preview-title"></h3>
+                  <p id="command-preview-message"></p>
+                  <small id="command-preview-footer"></small>
+                </article>
+                <div id="command-preview-links" class="preview-links"></div>
+              </div>
+              <div class="hint">
+                Draft edits do not change the published reply. Role restrictions are
+                enforced when a command runs; the command may still appear in Discord’s
+                command picker. Mentions never ping users or roles.
               </div>
             </aside>
           </div>

@@ -1,6 +1,9 @@
 const $ = (id) => document.getElementById(id);
 const form = $('settings');
 const welcomeForm = $('welcome-settings');
+const commandForm = $('command-settings');
+let commandRecords = [];
+let commandDirty = true;
 let csrf;
 let guild;
 let loading = false;
@@ -64,6 +67,10 @@ async function loadGuild() {
     $('server-name').textContent = data.name;
     const categories = data.channels.filter((c) => c.type === 4);
     const text = data.channels.filter((c) => c.type === 0);
+    options('role', data.roles, null, 'Everyone', commandForm);
+    commandRecords = data.customCommands || [];
+    renderCommandList();
+    resetCommand();
     options('channel', text, data.welcome.channel, 'No welcome message', welcomeForm);
     options('role', data.roles, data.welcome.role, 'No join role', welcomeForm);
     for (const name of ['title', 'message', 'footer']) {
@@ -121,6 +128,7 @@ async function loadGuild() {
           tickets: 'Private support tickets, panels, intake forms and transcripts.',
           example: 'A simple command that shows how extensions fit together.',
           welcome: 'Custom greetings and basic join roles for new community members.',
+          builder: 'Dashboard-authored reply commands with safe actions and role checks.',
         }[extension.id] || 'Trusted extension installed on this bot.';
       const button = document.createElement('button');
       button.textContent = extension.locked
@@ -218,7 +226,7 @@ for (const button of document.querySelectorAll('[data-step]')) {
 }
 for (const button of document.querySelectorAll('[data-tab]')) {
   button.onclick = () => {
-    for (const section of ['tickets', 'extensions', 'welcome']) {
+    for (const section of ['tickets', 'extensions', 'welcome', 'commands']) {
       $(section === 'welcome' ? 'welcome-module' : section).hidden =
         section !== button.dataset.tab;
     }
@@ -320,3 +328,157 @@ welcomeForm.addEventListener('submit', (event) => {
   void saveWelcome(false);
 });
 $('welcome-test').onclick = () => saveWelcome(true);
+
+function commandPreview() {
+  $('command-preview-name').textContent =
+    `/${commandForm.elements.namedItem('name').value || 'your-command'}`;
+  for (const name of ['content', 'title', 'message', 'footer']) {
+    $(`command-preview-${name}`).textContent = commandForm.elements.namedItem(name).value;
+  }
+  $('command-preview').hidden = !commandForm.elements.namedItem('embed').checked;
+  $('command-preview').style.borderLeftColor =
+    commandForm.elements.namedItem('color').value;
+  $('command-preview-links').replaceChildren();
+  for (const line of commandForm.elements
+    .namedItem('links')
+    .value.split('\n')
+    .filter((line) => line.trim())
+    .slice(0, 5)) {
+    const button = document.createElement('span');
+    button.className = 'link-preview';
+    button.textContent = `${line.split('|')[0]} ↗`;
+    $('command-preview-links').append(button);
+  }
+}
+function resetCommand() {
+  commandDirty = true;
+  commandForm.reset();
+  commandForm.elements.namedItem('name').readOnly = false;
+  $('command-status').textContent = 'New draft';
+  commandPreview();
+}
+function renderCommandList() {
+  $('command-list').replaceChildren();
+  for (const record of commandRecords) {
+    const card = document.createElement('article');
+    card.className = 'extension-card';
+    const title = document.createElement('h2');
+    title.textContent = `/${record.draft.name}`;
+    const status = document.createElement('p');
+    status.textContent = record.published
+      ? 'Published · draft can be edited separately'
+      : 'Draft · not available in Discord';
+    const button = document.createElement('button');
+    button.className = 'secondary';
+    button.textContent = 'Edit command';
+    button.onclick = () => {
+      if (loading) {
+        return;
+      }
+      for (const [key, value] of Object.entries(record.draft)) {
+        const field = commandForm.elements.namedItem(key);
+        if (!field) {
+          continue;
+        }
+        if (field.type === 'checkbox') {
+          field.checked = value;
+        } else if (key === 'color') {
+          field.value = `#${value.toString(16).padStart(6, '0')}`;
+        } else if (key === 'links') {
+          field.value = value.map((link) => `${link.label}|${link.url}`).join('\n');
+        } else {
+          field.value = value ?? '';
+        }
+      }
+      commandForm.elements.namedItem('name').readOnly = true;
+      commandDirty = false;
+      $('command-status').textContent = record.published
+        ? 'Published · save edits before publishing again'
+        : 'Saved draft';
+      commandPreview();
+      commandForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    card.append(title, status, button);
+    $('command-list').append(card);
+  }
+}
+async function commandAction(action) {
+  if (loading || !guild) {
+    return;
+  }
+  if (action === 'publish' && commandDirty) {
+    notice('Save your changes as a draft before publishing.', true);
+    return;
+  }
+  if (
+    action === 'delete' &&
+    !window.confirm(
+      'Delete this saved draft? Published commands must be unpublished first.',
+    )
+  ) {
+    return;
+  }
+  loading = true;
+  $('guild').disabled = true;
+  for (const button of commandForm.querySelectorAll('button')) {
+    button.disabled = true;
+  }
+  try {
+    const data = Object.fromEntries(new FormData(commandForm));
+    data.embed = commandForm.elements.namedItem('embed').checked;
+    data.ephemeral = commandForm.elements.namedItem('ephemeral').checked;
+    data.cooldown = Number(data.cooldown);
+    const result = await api(
+      `/api/guilds/${guild}/command-${action}`,
+      action === 'save' ? data : { name: data.name },
+    );
+    commandRecords = result.commands;
+    commandDirty = false;
+    renderCommandList();
+    notice(
+      {
+        save: 'Draft saved. Publish when you are ready.',
+        publish: 'Saved draft published to Discord.',
+        unpublish: 'Command unpublished. Its draft is retained.',
+        delete: 'Draft deleted.',
+      }[action],
+    );
+    if (action === 'delete') {
+      resetCommand();
+    } else {
+      commandForm.elements.namedItem('name').readOnly = true;
+      $('command-status').textContent =
+        action === 'save'
+          ? 'Saved draft'
+          : action === 'publish'
+            ? 'Published'
+            : 'Unpublished draft';
+    }
+  } catch (error) {
+    notice(error.message, true);
+  } finally {
+    loading = false;
+    $('guild').disabled = false;
+    for (const button of commandForm.querySelectorAll('button')) {
+      button.disabled = false;
+    }
+  }
+}
+commandForm.noValidate = true;
+commandForm.addEventListener('input', () => {
+  commandDirty = true;
+  commandPreview();
+  $('command-status').textContent = 'Unsaved changes — save before publishing';
+});
+commandForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  void commandAction('save');
+});
+$('command-new').onclick = () => {
+  if (!loading) {
+    resetCommand();
+  }
+};
+for (const action of ['publish', 'unpublish', 'delete']) {
+  $(`command-${action}`).onclick = () => commandAction(action);
+}

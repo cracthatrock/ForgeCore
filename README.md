@@ -39,7 +39,20 @@ Guilds intent by default; optional Message Content Intent for on-demand ticket t
 
 Run `npm test`, `npm run check`, `npm run build` and `npm run format:check`. Run `npm run format` to apply consistent two-space indentation. Production source uses strict TypeScript; JavaScript test doubles exercise runtime validation. CI repeats these on Node 24. Integration checks: verify non-admin cannot configure modules, disabling example affects only one server, restart preserves settings, and re-enable restores hello.
 
-Implemented: ticket and welcome modules with Discord OAuth dashboard. Next: constrained command builder.
+Implemented: ticket and welcome modules, Discord OAuth dashboard and a constrained reply-command builder.
+
+## Command studio
+
+Open **Commands** in the dashboard to create server-specific slash commands such as `/rules`, `/socials` or `/faq`. Managers can configure static reply text, an optional embed, up to five HTTPS link buttons, one optional allowed role, a 1–300 second per-user cooldown, and private or public replies. Private replies are the default. The preview approximates Discord formatting and never executes HTML or scripts.
+
+1. Choose a unique lowercase name and description. Built-in command names are reserved. Names cannot be changed after saving; create a new draft to rename a command.
+2. Write reply text or an embed title/description. Buttons use one `Label|https://example.com` line each. Add an allowed role if needed; users must hold that exact role, including administrators. Restricted commands may still appear in Discord’s picker, but unauthorized execution receives a private denial.
+3. **Save draft** stores your edits without changing the active reply. **Publish command** registers the saved draft as a real guild slash command and activates that snapshot. Save unsaved edits before publishing. Publishing updates only that command, leaving built-ins intact. [Discord guild command registration documentation](https://github.com/discord/discord-api-docs/blob/main/developers/interactions/application-commands.mdx).
+4. To remove a live command, **Unpublish** first. Its draft remains editable. **Delete draft** removes only unpublished drafts and asks for confirmation. Each server supports up to 25 saved custom commands.
+
+The **builder** extension toggle stops custom command execution for that server; it does not remove their registrations. `/builder` shows saved and published counts. Templates persist in SQLite, and `npm run deploy` includes published custom commands for the development server so redeployment does not erase them. Cooldowns remain process-local. Discord registration and SQLite changes are separate operations: if registration fails, the saved draft remains available for retry. No global custom commands, arbitrary code, fetched web content, role assignment, script actions, arguments or scheduling are supported by this builder. All reply mentions are disabled, even for public commands. Link buttons navigate only when a user clicks them.
+
+Live checklist: publish a `/rules` draft, run it in Discord, edit and save its draft to verify the live reply stays unchanged, publish again, test a restricted command using an account without the allowed role, test its cooldown, unpublish it, and confirm built-in commands still work. Automated checks cover those state and access boundaries with isolated Discord doubles; browser checks use synthetic API fixtures and do not publish real test content.
 
 ## Welcome module
 
