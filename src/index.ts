@@ -17,7 +17,10 @@ const store = new SettingsStore(config.databasePath);
 const registry = createRegistry(extensions);
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [
+    GatewayIntentBits.Guilds,
+    ...(config.ticketTranscripts ? [GatewayIntentBits.MessageContent] : []),
+  ],
   allowedMentions: { parse: [] },
 });
 const dispatch = createDispatcher({ registry, store });

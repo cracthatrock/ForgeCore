@@ -33,12 +33,27 @@ Use interaction.guildId for all server-owned records. Never trust a client-suppl
 
 ## Security and operational limits
 
-Only Guilds intent; no message-content collection. User-facing replies are ephemeral with mentions disabled. Errors log command/server metadata, not raw exceptions, tokens or messages. SQL uses prepared statements. Cooldowns are process-local and reset on restart: run one instance for this milestone. SQLite settings persist in data/forge.sqlite; keep the database and WAL files on durable storage and back up consistently. This is a tested foundation, not a claim of complete production security.
+Guilds intent by default; optional Message Content Intent for on-demand ticket transcripts. Message bodies are not stored in SQLite. User-facing replies are ephemeral with mentions disabled. Errors log command/server metadata, not raw exceptions, tokens or messages. SQL uses prepared statements. Cooldowns are process-local and reset on restart: run one instance for this milestone. SQLite settings persist in data/forge.sqlite; keep the database and WAL files on durable storage and back up consistently. This is a tested foundation, not a claim of complete production security.
 
 ## Checks and next milestones
 
 Run `npm test`, `npm run check`, `npm run build` and `npm run format:check`. Run `npm run format` to apply consistent two-space indentation. Production source uses strict TypeScript; JavaScript test doubles exercise runtime validation. CI repeats these on Node 24. Integration checks: verify non-admin cannot configure modules, disabling example affects only one server, restart preserves settings, and re-enable restores hello.
 
-Next: ticket module; welcome module with explicitly required intent; Discord OAuth dashboard with server permission rechecks and CSRF protections; constrained command builder. None of these later features is implemented yet.
+Implemented: ticket module. Next: welcome module with explicitly required intent; Discord OAuth dashboard with server permission rechecks and CSRF protections; constrained command builder. None of these later features is implemented yet.
 
 Sources: https://discordjs.guide/legacy/app-creation/creating-commands and https://discordjs.guide/legacy/popular-topics/permissions-extended
+
+## Tickets
+
+Register the new command with `npm run deploy`. The bot needs View Channels, Send Messages, Read Message History, Attach Files, Manage Channels and Manage Roles. Place its role above your support role.
+
+1. Create a category and a dedicated support role.
+2. A member with Manage Server runs `/ticket setup category:<category> staff:<role>`.
+3. Members use `/ticket open`. Everyone is denied visibility except the owner, support role and bot. Discord administrators can still access tickets.
+4. Staff use `/ticket claim` inside the ticket. First claim wins.
+5. Owner or staff use `/ticket close`. The owner's replies are locked; the channel is preserved. Staff can still write. Administrators bypass channel restrictions.
+6. To export, enable Message Content Intent in the Developer Portal, set `TICKET_TRANSCRIPTS=true` in `.env`, and restart. Owner or staff use `/ticket transcript` inside a ticket. The private text attachment contains up to the newest 1,000 messages and available attachment links. Deleted messages and attachment file copies are excluded. [Discord message-content documentation](https://github.com/discord/discord-api-docs/blob/main/developers/resources/message.mdx).
+
+Ticket configuration, ownership, claims and closed state persist in SQLite. One open ticket per member per server is enforced. Changing setup affects new channels; existing permissions are not rewritten. Disable commands with `/extensions name:tickets enabled:false`. Server managers can delete preserved channels manually. Run a single instance: operation locks are process-local.
+
+Live checklist: verify ordinary-user setup denial, visibility with a second account, duplicate opens, staff-only claims, close and reopen, restart persistence, transcript export and extension disabling. Automated checks use simulated Discord interactions; live channel creation still needs testing with your bot credentials.

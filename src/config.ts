@@ -15,5 +15,6 @@ export function loadConfig(env = process.env) {
     clientId,
     guildId,
     databasePath: env.DATABASE_PATH || 'data/forge.sqlite',
+    ticketTranscripts: env.TICKET_TRANSCRIPTS === 'true',
   };
 }
