@@ -65,3 +65,13 @@ Run `/ticket setup` without options to open the private setup wizard. Select you
 Members click **Get support**, enter a subject and description, and receive a private ticket with a status card. Staff use **Claim** or **Unclaim**; the assigned member is shown on the card. **Close** asks for confirmation. Closed tickets offer **Reopen** (staff only) and **Export transcript**. Controls use persistent ticket records and continue to work after a restart. Setup drafts expire on restart. Republishing makes old panels inactive. Reopening is blocked if the owner has another open ticket.
 
 The previous `/ticket setup category:... staff:...` still configures the command-only flow; use the wizard to publish a panel. Existing tickets remain accessible through slash commands. The wizard uses existing channels and roles; create those in Discord before running it. There is no web dashboard yet.
+
+## Customizing your support desk
+
+The setup wizard now has four pages. Use **Back** and **Next** to move between Routing, Appearance, Intake form and Transcript archive. Your saved settings are loaded when you run setup again; changes apply when you publish.
+
+- **Appearance:** edit panel title, description, hex color, button label and footer; separately edit ticket title, welcome message and color. Preview the panel before publishing.
+- **Intake form:** toggle the form off to open a channel immediately, or edit its title and one to five questions. Write each question on its own line: `required|short|Your question` or `optional|paragraph|Your question`. Short inputs allow 100 characters; paragraph inputs allow 1,000. The ticket card previews up to 700 characters per answer; exported transcripts include full submitted answers.
+- **Transcript archive:** select a private staff text channel, or disable archive saving. The bot checks its sending/attachment permissions and rejects channels visible to non-staff roles or explicit non-staff member overwrites. Staff and server managers can view archives. It checks again when exporting, in case channel permissions have changed.
+
+Closing automatically saves a text transcript in the configured archive when Message Content Intent is enabled and `TICKET_TRANSCRIPTS=true`. Manual exports save an archive copy too. If archiving fails, the bot reports the failure and preserves the ticket channel so you can retry. Exports still include at most the newest 1,000 available messages. Existing tickets keep the appearance, answers and archive destination from when they were opened. Archive messages and submitted answers remain until a server manager removes them; no automatic retention policy is implemented.

@@ -18,6 +18,15 @@ import {
   type ChatInputCommandInteraction,
 } from 'discord.js';
 import type { SettingsStore, TicketRecord } from '../store.js';
+import { readOptions } from './ticket-options.js';
+import {
+  setupView,
+  setupModal,
+  applyModal,
+  panelView,
+  type SetupSession,
+} from './ticket-setup.js';
+import { validateArchive } from './ticket-archive.js';
 
 export type TicketInteraction =
   | ChatInputCommandInteraction<'cached' | 'raw'>
@@ -27,13 +36,14 @@ export type TicketAction = (
   interaction: TicketInteraction,
   store: SettingsStore,
   action: string,
-  intake?: { subject: string; description: string },
+  intake?: {
+    subject: string;
+    description: string;
+    answers?: { label: string; value: string }[];
+  },
 ) => Promise<unknown>;
 
-const sessions = new Map<
-  string,
-  { userId: string; expires: number; staff?: string; category?: string; panel?: string }
->();
+const sessions = new Map<string, SetupSession>();
 const cooldowns = new Map<string, number>();
 const row = (...buttons: ButtonBuilder[]) =>
   new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
@@ -41,12 +51,16 @@ const button = (action: string, label: string, style = ButtonStyle.Secondary) =>
   new ButtonBuilder().setCustomId(`tickets:${action}`).setLabel(label).setStyle(style);
 
 export function ticketView(record: TicketRecord) {
+  const options = readOptions(record.options_json);
+  const answers = record.answers_json
+    ? (JSON.parse(record.answers_json) as { label: string; value: string }[])
+    : [];
   return {
     embeds: [
       new EmbedBuilder()
-        .setColor(record.closed ? 0x64748b : 0x5865f2)
-        .setTitle(record.closed ? 'Ticket closed' : 'Support ticket')
-        .setDescription(record.subject || 'Support request')
+        .setColor(record.closed ? 0x64748b : options.ticketColor)
+        .setTitle(record.closed ? 'Ticket closed' : options.ticketTitle)
+        .setDescription(options.ticketMessage)
         .addFields(
           { name: 'Opened by', value: `<@${record.owner_id}>`, inline: true },
           {
@@ -56,7 +70,16 @@ export function ticketView(record: TicketRecord) {
           },
           { name: 'Status', value: record.closed ? 'Closed' : 'Open', inline: true },
         )
-        .setFooter({ text: 'ForgeCore • Private support' }),
+        .addFields(
+          { name: 'Request', value: (record.subject || 'Support request').slice(0, 100) },
+          ...answers.map((answer) => ({
+            name: answer.label,
+            value: answer.value
+              ? answer.value.slice(0, 700) + (answer.value.length > 700 ? '…' : '')
+              : 'Not provided',
+          })),
+        )
+        .setFooter({ text: options.footer }),
     ],
     components: [
       record.closed
@@ -83,70 +106,19 @@ export async function refreshTicket(channel: TextChannel, record: TicketRecord) 
   if (message) await message.edit(ticketView(record));
 }
 
-function setupView(session: { staff?: string; category?: string; panel?: string }) {
-  const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle('Set up your support desk')
-    .setDescription(
-      'Choose your support team, ticket category and public panel channel. Then publish your panel.',
-    )
-    .addFields(
-      {
-        name: 'Support role',
-        value: session.staff ? `<@&${session.staff}>` : 'Not selected',
-      },
-      {
-        name: 'Ticket category',
-        value: session.category ? `<#${session.category}>` : 'Not selected',
-      },
-      {
-        name: 'Panel channel',
-        value: session.panel ? `<#${session.panel}>` : 'Not selected',
-      },
-    )
-    .setFooter({
-      text: 'Setup expires after 10 minutes. Existing tickets are preserved.',
-    });
-  return {
-    embeds: [embed],
-    components: [
-      new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(
-        new RoleSelectMenuBuilder()
-          .setCustomId('tickets:setup-role')
-          .setPlaceholder('Select a support role'),
-      ),
-      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
-        new ChannelSelectMenuBuilder()
-          .setCustomId('tickets:setup-category')
-          .setPlaceholder('Select the ticket category')
-          .setChannelTypes(ChannelType.GuildCategory),
-      ),
-      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
-        new ChannelSelectMenuBuilder()
-          .setCustomId('tickets:setup-panel')
-          .setPlaceholder('Select the public panel channel')
-          .setChannelTypes(ChannelType.GuildText),
-      ),
-      row(
-        button('setup-publish', 'Publish support panel', ButtonStyle.Success).setDisabled(
-          !session.staff || !session.category || !session.panel,
-        ),
-      ),
-    ],
-    allowedMentions: { parse: [] as never[] },
-  };
-}
-
-export async function beginSetup(interaction: TicketInteraction) {
+export async function beginSetup(interaction: TicketInteraction, store: SettingsStore) {
   for (const [key, session] of sessions)
     if (session.expires < Date.now()) sessions.delete(key);
-  const session: {
-    userId: string;
-    expires: number;
-    staff?: string;
-    category?: string;
-    panel?: string;
-  } = { userId: interaction.user.id, expires: Date.now() + 600_000 };
+  const config = store.ticketConfig(interaction.guildId!);
+  const session: SetupSession = {
+    userId: interaction.user.id,
+    expires: Date.now() + 600_000,
+    page: 0,
+    staff: config?.staff_role_id,
+    category: config?.category_id,
+    panel: config?.panel_channel_id || undefined,
+    options: readOptions(config?.options_json),
+  };
   const message = await interaction.editReply(setupView(session));
   sessions.set(message.id, session);
 }
@@ -192,8 +164,11 @@ export async function handleTicketUI(
       }
       cooldowns.set(key, now + 1500);
     }
-    if (action.startsWith('setup-') && !interaction.isModalSubmit()) {
-      const session = sessions.get(interaction.message.id);
+    if (action.startsWith('setup-')) {
+      const sessionId = interaction.isModalSubmit()
+        ? action.split(':')[1]
+        : interaction.message.id;
+      const session = sessions.get(sessionId);
       if (
         !session ||
         session.expires < Date.now() ||
@@ -210,6 +185,43 @@ export async function handleTicketUI(
         await fail('Manage Server is required.');
         return true;
       }
+      const setupAction = action.split(':')[0];
+      if (interaction.isModalSubmit()) {
+        try {
+          applyModal(
+            setupAction,
+            (id) => interaction.fields.getTextInputValue(id),
+            session.options,
+          );
+        } catch (error) {
+          await fail(error instanceof Error ? error.message : 'Invalid settings.');
+          return true;
+        }
+        await interaction.deferUpdate();
+        await interaction.editReply(setupView(session));
+        return true;
+      }
+      if (
+        interaction.isButton() &&
+        ['setup-panel-style', 'setup-ticket-style', 'setup-form-style'].includes(action)
+      ) {
+        await interaction.showModal(setupModal(action, sessionId, session.options));
+        return true;
+      }
+      if (action === 'setup-preview' && interaction.isButton()) {
+        await interaction.reply({
+          ...panelView(session.options),
+          flags: MessageFlags.Ephemeral,
+        });
+        return true;
+      }
+      if (action === 'setup-back') session.page = Math.max(0, session.page - 1);
+      if (action === 'setup-next') session.page = Math.min(3, session.page + 1);
+      if (action === 'setup-toggle-form')
+        session.options.formEnabled = !session.options.formEnabled;
+      if (action === 'setup-clear-transcripts') session.options.transcriptChannel = null;
+      if (interaction.isChannelSelectMenu() && action === 'setup-transcripts')
+        session.options.transcriptChannel = interaction.values[0];
       if (interaction.isRoleSelectMenu()) session.staff = interaction.values[0];
       if (interaction.isChannelSelectMenu() && action === 'setup-category')
         session.category = interaction.values[0];
@@ -250,21 +262,18 @@ export async function handleTicketUI(
         });
         return true;
       }
-      const message = await panel.send({
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x5865f2)
-            .setTitle('How can we help?')
-            .setDescription(
-              'Need help or have a question? Open a private ticket with our support team.\n\nClick below and tell us a little about your request.',
-            )
-            .setFooter({ text: 'One open ticket per member • ForgeCore' }),
-        ],
-        components: [row(button('open', 'Get support', ButtonStyle.Primary))],
-        allowedMentions: { parse: [] },
-      });
+      if (session.options.transcriptChannel) {
+        const archive = await guild.channels.fetch(session.options.transcriptChannel);
+        const problem = await validateArchive(archive, session.staff);
+        if (problem) {
+          await interaction.editReply({ ...setupView(session), content: problem });
+          return true;
+        }
+      }
+      const message = await panel.send(panelView(session.options));
       store.configureTickets(guild.id, category.id, staff.id);
       store.savePanel(guild.id, panel.id, message.id);
+      store.saveTicketOptions(guild.id, JSON.stringify(session.options));
       sessions.delete(interaction.message.id);
       await interaction.editReply({
         content: `Support panel published in <#${panel.id}>. Try the Get support button.`,
@@ -283,25 +292,29 @@ export async function handleTicketUI(
         await fail('This panel is outdated. Use the latest support panel.');
         return true;
       }
+      const options = readOptions(config.options_json);
+      if (!options.formEnabled) {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await run(interaction, store, 'open');
+        return true;
+      }
       const modal = new ModalBuilder()
         .setCustomId(`tickets:intake:${interaction.message.id}`)
-        .setTitle('Contact support')
+        .setTitle(options.formTitle)
         .addComponents(
-          new ActionRowBuilder<TextInputBuilder>().addComponents(
-            new TextInputBuilder()
-              .setCustomId('subject')
-              .setLabel('What do you need help with?')
-              .setStyle(TextInputStyle.Short)
-              .setMaxLength(100)
-              .setRequired(true),
-          ),
-          new ActionRowBuilder<TextInputBuilder>().addComponents(
-            new TextInputBuilder()
-              .setCustomId('description')
-              .setLabel('Tell us more')
-              .setStyle(TextInputStyle.Paragraph)
-              .setMaxLength(2000)
-              .setRequired(true),
+          ...options.questions.map((question, index) =>
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+              new TextInputBuilder()
+                .setCustomId(`question-${index}`)
+                .setLabel(question.label)
+                .setStyle(
+                  question.style === 'short'
+                    ? TextInputStyle.Short
+                    : TextInputStyle.Paragraph,
+                )
+                .setMaxLength(question.style === 'short' ? 100 : 1000)
+                .setRequired(question.required),
+            ),
           ),
         );
       await interaction.showModal(modal);
@@ -317,9 +330,17 @@ export async function handleTicketUI(
         return true;
       }
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const options = readOptions(config.options_json);
+      const answers = options.questions.map((question, index) => ({
+        label: question.label,
+        value: interaction.fields.getTextInputValue(`question-${index}`).trim(),
+      }));
       await run(interaction, store, 'open', {
-        subject: interaction.fields.getTextInputValue('subject').trim(),
-        description: interaction.fields.getTextInputValue('description').trim(),
+        subject:
+          answers.find((answer) => answer.value)?.value.slice(0, 100) ||
+          'Support request',
+        description: '',
+        answers,
       });
       return true;
     }

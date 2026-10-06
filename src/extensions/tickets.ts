@@ -8,7 +8,10 @@ import {
   type TextChannel,
 } from 'discord.js';
 import type { Extension, CommandContext } from '../types.js';
-import type { SettingsStore } from '../store.js';
+import type { SettingsStore, TicketRecord } from '../store.js';
+import { readOptions } from './ticket-options.js';
+import { validateArchive } from './ticket-archive.js';
+import { EmbedBuilder } from 'discord.js';
 import {
   beginSetup,
   handleTicketUI,
@@ -20,7 +23,7 @@ import {
 const locks = new Set<string>();
 const permissions = PermissionFlagsBits;
 
-async function transcript(channel: TextChannel) {
+async function transcript(channel: TextChannel, record?: TicketRecord) {
   const lines: string[] = [];
   let before: string | undefined;
 
@@ -52,17 +55,56 @@ async function transcript(channel: TextChannel) {
 
   return new AttachmentBuilder(
     Buffer.from(
-      `Ticket ${channel.id}\nNewest 1,000 messages maximum.\n\n${lines.reverse().join('\n\n')}`,
+      `Ticket ${channel.id}\nNewest 1,000 messages maximum.\nForm answers: ${record?.answers_json || '[]'}\n\n${lines.reverse().join('\n\n')}`,
     ),
     { name: `ticket-${channel.id}.txt` },
   );
 }
 
+async function saveArchive(
+  channel: TextChannel,
+  record: TicketRecord,
+  file: AttachmentBuilder,
+) {
+  const options = readOptions(record.options_json);
+  if (!options.transcriptChannel) return '';
+  const archive = await channel.guild.channels.fetch(options.transcriptChannel);
+  const problem = await validateArchive(archive, record.staff_role_id || '');
+  if (problem || archive?.type !== ChannelType.GuildText) {
+    return `Transcript was not saved: ${problem || 'Archive channel unavailable.'}`;
+  }
+  await archive.send({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(options.ticketColor)
+        .setTitle('Ticket transcript')
+        .addFields(
+          { name: 'Ticket', value: `<#${channel.id}> (${channel.id})` },
+          { name: 'Opened by', value: `<@${record.owner_id}>`, inline: true },
+          {
+            name: 'Assigned to',
+            value: record.claimed_by ? `<@${record.claimed_by}>` : 'Unassigned',
+            inline: true,
+          },
+          { name: 'Request', value: record.subject || 'Support request' },
+        )
+        .setFooter({ text: 'Newest 1,000 messages • Text and attachment links' })
+        .setTimestamp(),
+    ],
+    files: [file],
+    allowedMentions: { parse: [] },
+  });
+  return `Transcript saved in <#${archive.id}>.`;
+}
 export async function runTicket(
   interaction: TicketInteraction,
   store: SettingsStore,
   action: string,
-  intake?: { subject: string; description: string },
+  intake?: {
+    subject: string;
+    description: string;
+    answers?: { label: string; value: string }[];
+  },
 ) {
   const guild = await interaction.client.guilds.fetch(interaction.guildId);
 
@@ -81,7 +123,7 @@ export async function runTicket(
       !interaction.options.getChannel('category') &&
       !interaction.options.getRole('staff')
     ) {
-      return beginSetup(interaction);
+      return beginSetup(interaction, store);
     }
     if (
       !interaction.options.getChannel('category') ||
@@ -191,6 +233,14 @@ export async function runTicket(
 
       const record = store.ticket(guild.id, channel.id)!;
       record.subject = intake?.subject || 'Support request';
+      record.options_json = config.options_json;
+      record.answers_json = JSON.stringify(intake?.answers || []);
+      store.saveTicketSnapshot(
+        guild.id,
+        channel.id,
+        JSON.stringify(readOptions(config.options_json)),
+        record.answers_json,
+      );
       const message = await channel.send(ticketView(record));
       if (message?.id) {
         store.saveTicketDetails(
@@ -236,10 +286,16 @@ export async function runTicket(
           'Transcript exports require TICKET_TRANSCRIPTS=true and Message Content Intent enabled in the Developer Portal.',
         );
       }
+      const file = await transcript(channel, record);
+      const archiveNote = await saveArchive(channel, record, file).catch(
+        () =>
+          'Archive save failed. Your private download is available; check archive permissions before retrying.',
+      );
       return interaction.editReply({
         content:
-          'Private transcript export. Includes available text and attachment links; deleted messages are unavailable.',
-        files: [await transcript(channel)],
+          'Private transcript export. Includes available text and attachment links; deleted messages are unavailable. ' +
+          archiveNote,
+        files: [file],
       });
     }
 
@@ -304,8 +360,26 @@ export async function runTicket(
     });
     store.closeTicket(guild.id, channel.id);
     await refreshTicket(channel, store.ticket(guild.id, channel.id)!);
+    let archiveNote = '';
+    if (readOptions(record.options_json).transcriptChannel) {
+      if (interaction.client.options.intents.has(GatewayIntentBits.MessageContent)) {
+        try {
+          archiveNote = await saveArchive(
+            channel,
+            record,
+            await transcript(channel, record),
+          );
+        } catch {
+          archiveNote =
+            'Transcript was not saved. Use Export transcript to retry; the ticket channel is preserved.';
+        }
+      } else {
+        archiveNote =
+          'Transcript was not saved: enable TICKET_TRANSCRIPTS and Message Content Intent first.';
+      }
+    }
     await interaction.editReply(
-      'Ticket closed. The channel is preserved for staff and transcript exports.',
+      'Ticket closed. The channel is preserved. ' + archiveNote,
     );
   } finally {
     locks.delete(key);

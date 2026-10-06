@@ -58,6 +58,28 @@ export class SettingsStore {
     migrate('tickets', 'control_message_id', 'TEXT');
     migrate('tickets', 'staff_role_id', 'TEXT');
     migrate('tickets', 'subject', "TEXT NOT NULL DEFAULT 'Support request'");
+    migrate('ticket_config', 'options_json', 'TEXT');
+    migrate('tickets', 'options_json', 'TEXT');
+    migrate('tickets', 'answers_json', 'TEXT');
+  }
+
+  saveTicketOptions(guildId: string, options: string) {
+    this.db
+      .prepare('UPDATE ticket_config SET options_json=? WHERE guild_id=?')
+      .run(options, id(guildId));
+  }
+
+  saveTicketSnapshot(
+    guildId: string,
+    channelId: string,
+    options: string,
+    answers: string,
+  ) {
+    this.db
+      .prepare(
+        'UPDATE tickets SET options_json=?, answers_json=? WHERE guild_id=? AND channel_id=?',
+      )
+      .run(options, answers, id(guildId), id(channelId));
   }
 
   savePanel(guildId: string, channelId: string, messageId: string) {
@@ -113,6 +135,7 @@ export class SettingsStore {
           staff_role_id: string;
           panel_channel_id: string | null;
           panel_message_id: string | null;
+          options_json: string | null;
         }
       | undefined;
   }
@@ -185,4 +208,6 @@ export interface TicketRecord {
   control_message_id?: string | null;
   staff_role_id?: string | null;
   subject?: string;
+  options_json?: string | null;
+  answers_json?: string | null;
 }
