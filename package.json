@@ -7,13 +7,22 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "start": "node --env-file=.env src/index.js",
-    "dev": "node --env-file=.env --watch src/index.js",
-    "deploy": "node --env-file=.env src/deploy.js",
-    "test": "node --test",
-    "check": "node --check src/index.js"
+    "start": "node --env-file=.env dist/index.js",
+    "dev": "node --env-file=.env --import tsx --watch src/index.ts",
+    "deploy": "node --env-file=.env --import tsx src/deploy.ts",
+    "test": "node --import tsx --test tests/*.test.js",
+    "check": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "build": "tsc"
   },
   "dependencies": {
     "discord.js": "14.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "prettier": "3.9.9",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
   }
 }
