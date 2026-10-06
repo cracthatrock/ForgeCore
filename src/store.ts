@@ -175,6 +175,12 @@ export class SettingsStore {
       .run(id(guildId), id(channelId));
   }
 
+  removeClosedTicket(guildId: string, channelId: string) {
+    this.db
+      .prepare('DELETE FROM tickets WHERE guild_id=? AND channel_id=? AND closed=1')
+      .run(id(guildId), id(channelId));
+  }
+
   isEnabled(guildId: string, extensionId: string): boolean {
     const row = this.db
       .prepare('SELECT enabled FROM settings WHERE guild_id=? AND extension_id=?')

@@ -17,6 +17,8 @@ export interface TicketOptions {
   formTitle: string;
   questions: FormQuestion[];
   transcriptChannel: string | null;
+  closedCategory: string | null;
+  openCategory: string | null;
 }
 
 export const defaultOptions: TicketOptions = {
@@ -37,6 +39,8 @@ export const defaultOptions: TicketOptions = {
     { label: 'Tell us more', required: true, style: 'paragraph' },
   ],
   transcriptChannel: null,
+  closedCategory: null,
+  openCategory: null,
 };
 
 export function readOptions(json?: string | null): TicketOptions {

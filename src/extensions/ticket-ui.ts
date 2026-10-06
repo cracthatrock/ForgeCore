@@ -86,6 +86,7 @@ export function ticketView(record: TicketRecord) {
         ? row(
             button('reopen', 'Reopen', ButtonStyle.Success),
             button('transcript', 'Export transcript'),
+            button('delete', 'Delete ticket', ButtonStyle.Danger),
           )
         : row(
             button('claim', 'Claim', ButtonStyle.Primary),
@@ -220,6 +221,9 @@ export async function handleTicketUI(
       if (action === 'setup-toggle-form')
         session.options.formEnabled = !session.options.formEnabled;
       if (action === 'setup-clear-transcripts') session.options.transcriptChannel = null;
+      if (interaction.isChannelSelectMenu() && action === 'setup-closed-category') {
+        session.options.closedCategory = interaction.values[0] || null;
+      }
       if (interaction.isChannelSelectMenu() && action === 'setup-transcripts')
         session.options.transcriptChannel = interaction.values[0];
       if (interaction.isRoleSelectMenu()) session.staff = interaction.values[0];
@@ -261,6 +265,22 @@ export async function handleTicketUI(
           ...setupView(session),
         });
         return true;
+      }
+      if (session.options.closedCategory) {
+        const closed = await guild.channels.fetch(session.options.closedCategory);
+        if (
+          closed?.type !== ChannelType.GuildCategory ||
+          !closed
+            .permissionsFor(me)
+            ?.has([PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles])
+        ) {
+          await interaction.editReply({
+            ...setupView(session),
+            content:
+              'Choose a closed category where the bot has Manage Channels and Manage Roles.',
+          });
+          return true;
+        }
       }
       if (session.options.transcriptChannel) {
         const archive = await guild.channels.fetch(session.options.transcriptChannel);
@@ -349,9 +369,31 @@ export async function handleTicketUI(
       return true;
     }
     const record = store.ticket(interaction.guildId, interaction.channelId);
-    const confirm = action === 'confirm-close';
+    const confirm = action === 'confirm-close' || action === 'confirm-delete';
     if (!record || (!confirm && record.control_message_id !== interaction.message.id)) {
       await fail('Use the controls on the ticket status message.');
+      return true;
+    }
+    if (action === 'delete') {
+      const guild = await interaction.client.guilds.fetch(interaction.guildId);
+      const member = await guild.members.fetch(interaction.user.id);
+      const role = record.staff_role_id || store.ticketConfig(guild.id)?.staff_role_id;
+      if (
+        !record.closed ||
+        (!member.permissions.has(PermissionFlagsBits.ManageGuild) &&
+          (!role || !member.roles.cache.has(role)))
+      ) {
+        await fail('Only staff can delete a closed ticket.');
+        return true;
+      }
+      await interaction.reply({
+        content:
+          'Permanently delete this ticket channel? Messages cannot be recovered. If an archive is configured, a transcript must be saved successfully before deletion.',
+        components: [
+          row(button('confirm-delete', 'Permanently delete', ButtonStyle.Danger)),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
       return true;
     }
     if (action === 'close') {
@@ -374,12 +416,29 @@ export async function handleTicketUI(
       });
       return true;
     }
-    if (!['claim', 'unclaim', 'reopen', 'transcript', 'confirm-close'].includes(action)) {
+    if (
+      ![
+        'claim',
+        'unclaim',
+        'reopen',
+        'transcript',
+        'confirm-close',
+        'confirm-delete',
+      ].includes(action)
+    ) {
       await fail('Unsupported action.');
       return true;
     }
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    await run(interaction, store, confirm ? 'close' : action);
+    await run(
+      interaction,
+      store,
+      action === 'confirm-delete'
+        ? 'delete'
+        : action === 'confirm-close'
+          ? 'close'
+          : action,
+    );
   } catch {
     console.error('Ticket interaction failed', { guildId: interaction.guildId });
     const message = {

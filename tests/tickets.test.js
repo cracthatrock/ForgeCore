@@ -187,3 +187,48 @@ test('reopen preserves the one-open-ticket constraint and panel records survive 
     store.close();
   }
 });
+
+test('closed tickets move without syncing permissions and deletion is staff-only', async () => {
+  const { readOptions } = await import('../src/extensions/ticket-options.js');
+  const store = new SettingsStore(':memory:');
+  const closedCategory = '923456789012345678';
+  let moved;
+  let deleted = 0;
+  try {
+    store.configureTickets(guildId, channelId, staffId);
+    store.addTicket(guildId, channelId, ownerId);
+    store.saveTicketSnapshot(
+      guildId,
+      channelId,
+      JSON.stringify({ ...readOptions(), closedCategory }),
+      '[]',
+    );
+    const request = context(store, 'close');
+    const guild = await request.interaction.client.guilds.fetch();
+    const channel = {
+      id: channelId,
+      type: ChannelType.GuildText,
+      permissionOverwrites: { edit: async () => {} },
+      setParent: async (id, options) => {
+        moved = { id, options };
+      },
+      delete: async () => {
+        deleted++;
+      },
+    };
+    guild.channels.fetch = async (id) =>
+      id === closedCategory ? { id, type: ChannelType.GuildCategory } : channel;
+    await tickets.commands[0].execute(request);
+    assert.deepEqual(moved, { id: closedCategory, options: { lockPermissions: false } });
+    request.interaction.options.getSubcommand = () => 'delete';
+    await tickets.commands[0].execute(request);
+    assert.equal(deleted, 0);
+    const member = await guild.members.fetch();
+    member.roles.cache.set(staffId, {});
+    await tickets.commands[0].execute(request);
+    assert.equal(deleted, 1);
+    assert.equal(store.ticket(guildId, channelId), undefined);
+  } finally {
+    store.close();
+  }
+});

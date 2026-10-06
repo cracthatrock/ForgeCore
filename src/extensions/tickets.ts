@@ -238,7 +238,10 @@ export async function runTicket(
       store.saveTicketSnapshot(
         guild.id,
         channel.id,
-        JSON.stringify(readOptions(config.options_json)),
+        JSON.stringify({
+          ...readOptions(config.options_json),
+          openCategory: config.category_id,
+        }),
         record.answers_json,
       );
       const message = await channel.send(ticketView(record));
@@ -299,11 +302,44 @@ export async function runTicket(
       });
     }
 
+    if (action === 'delete') {
+      if (!isStaff || !record.closed) {
+        return interaction.editReply('Only staff can delete a closed ticket.');
+      }
+      if (readOptions(record.options_json).transcriptChannel) {
+        if (!interaction.client.options.intents.has(GatewayIntentBits.MessageContent)) {
+          return interaction.editReply(
+            'Deletion blocked: enable transcript access or export and preserve the ticket first.',
+          );
+        }
+        const note = await saveArchive(
+          channel,
+          record,
+          await transcript(channel, record),
+        );
+        if (!note.startsWith('Transcript saved')) {
+          return interaction.editReply('Deletion blocked. ' + note);
+        }
+      }
+      await interaction.editReply('Deleting the closed ticket channel.');
+      await channel.delete(`Closed ticket deletion by ${member.id}`);
+      store.removeClosedTicket(guild.id, channel.id);
+      return;
+    }
     if (action === 'reopen') {
       if (!isStaff) return interaction.editReply('Only staff can reopen tickets.');
       if (!record.closed) return interaction.editReply('This ticket is already open.');
       if (store.openTicket(guild.id, record.owner_id))
         return interaction.editReply('The owner already has another open ticket.');
+      const openCategory =
+        readOptions(record.options_json).openCategory || config.category_id;
+      const parent = await guild.channels.fetch(openCategory);
+      if (parent?.type !== ChannelType.GuildCategory) {
+        return interaction.editReply(
+          'The original ticket category is unavailable. Restore it before reopening.',
+        );
+      }
+      await channel.setParent(parent.id, { lockPermissions: false });
       store.reopenTicket(guild.id, channel.id);
       try {
         await channel.permissionOverwrites.edit(record.owner_id, {
@@ -359,6 +395,19 @@ export async function runTicket(
       SendMessagesInThreads: false,
     });
     store.closeTicket(guild.id, channel.id);
+    let routingNote = '';
+    const closedCategory = readOptions(record.options_json).closedCategory;
+    if (closedCategory) {
+      try {
+        const destination = await guild.channels.fetch(closedCategory);
+        if (destination?.type !== ChannelType.GuildCategory)
+          throw new Error('Category unavailable');
+        await channel.setParent(destination.id, { lockPermissions: false });
+      } catch {
+        routingNote =
+          'The ticket is locked, but could not be moved. Check the closed category and bot permissions. ';
+      }
+    }
     await refreshTicket(channel, store.ticket(guild.id, channel.id)!);
     let archiveNote = '';
     if (readOptions(record.options_json).transcriptChannel) {
@@ -379,7 +428,7 @@ export async function runTicket(
       }
     }
     await interaction.editReply(
-      'Ticket closed. The channel is preserved. ' + archiveNote,
+      'Ticket closed. The channel is preserved. ' + routingNote + archiveNote,
     );
   } finally {
     locks.delete(key);

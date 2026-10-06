@@ -73,6 +73,11 @@ export function setupView(session: SetupSession) {
           inline: true,
         },
       );
+    embed.addFields({
+      name: 'Closed category',
+      value: o.closedCategory ? `<#${o.closedCategory}>` : 'Keep in original category',
+      inline: true,
+    });
     components.push(
       new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(
         new RoleSelectMenuBuilder()
@@ -90,6 +95,16 @@ export function setupView(session: SetupSession) {
           .setCustomId('tickets:setup-panel')
           .setPlaceholder('Public panel channel')
           .setChannelTypes(ChannelType.GuildText),
+      ),
+    );
+    components.push(
+      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
+        new ChannelSelectMenuBuilder()
+          .setCustomId('tickets:setup-closed-category')
+          .setPlaceholder('Optional closed-ticket category')
+          .setChannelTypes(ChannelType.GuildCategory)
+          .setMinValues(0)
+          .setMaxValues(1),
       ),
     );
   } else if (session.page === 1) {

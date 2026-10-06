@@ -75,3 +75,9 @@ The setup wizard now has four pages. Use **Back** and **Next** to move between R
 - **Transcript archive:** select a private staff text channel, or disable archive saving. The bot checks its sending/attachment permissions and rejects channels visible to non-staff roles or explicit non-staff member overwrites. Staff and server managers can view archives. It checks again when exporting, in case channel permissions have changed.
 
 Closing automatically saves a text transcript in the configured archive when Message Content Intent is enabled and `TICKET_TRANSCRIPTS=true`. Manual exports save an archive copy too. If archiving fails, the bot reports the failure and preserves the ticket channel so you can retry. Exports still include at most the newest 1,000 available messages. Existing tickets keep the appearance, answers and archive destination from when they were opened. Archive messages and submitted answers remain until a server manager removes them; no automatic retention policy is implemented.
+
+## Closed tickets and deletion
+
+On **Routing** in `/ticket setup`, optionally select a closed-ticket category. Clear that selection to keep tickets in their original category. Publish to save the setting for new tickets. Closing moves the channel with `lockPermissions:false`, preserving its private overwrites. Reopening returns it to its original category. A failed move is reported while the ticket remains closed and locked.
+
+Closed cards now offer **Delete ticket**. Only support staff or server managers can confirm permanent deletion. The bot rechecks ticket state and authorization at confirmation time. If a transcript archive is configured, deletion is blocked until a fresh transcript is successfully saved there. Without an archive, the confirmation warns that messages cannot be recovered. Successful deletion also removes the ticket's database record; existing archive files are retained.
