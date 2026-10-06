@@ -5,3 +5,6 @@ node_modules/
 data/
 *.log
 dist/
+# Intermediate walkthrough captures; publish only the final video and gallery.
+docs/media/tour-*.png
+docs/media/tour-frames.txt

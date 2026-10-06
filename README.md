@@ -1,6 +1,30 @@
 # ForgeCore
 
-A TypeScript Discord bot foundation with trusted code extensions, slash commands and persistent per-server extension settings. First milestone of a configurable bot platform. TicketForge and WelcomeForge prototypes remain separate.
+A configurable Discord bot built in TypeScript, with a server dashboard, private support tickets, welcome messages and a command builder. Built as a portfolio project demonstrating a bot and dashboard connected through persistent server settings.
+
+**Configure it in the dashboard. Use it in Discord. Extend it in TypeScript.**
+
+![ForgeCore support dashboard](docs/media/support-desk.png)
+
+## See it in action
+
+[Watch the 45-second dashboard walkthrough](docs/media/forgecore-walkthrough.mp4) · [Feature gallery](docs/SHOWCASE.md) · [Live demo recording guide](docs/DEMO.md)
+
+The walkthrough and screenshots show the real dashboard UI with isolated example data. They do not show live Discord publishing. Ticket, welcome and custom-command flows have also been manually tested in a development server; repeat the integration checks below for your own setup.
+
+| Feature              | What you can configure                                                                             |
+| -------------------- | -------------------------------------------------------------------------------------------------- |
+| Support tickets      | Panels, embeds, intake forms, support roles, closed categories and private transcript archives     |
+| Welcome messages     | Greeting templates, colors, welcome channel and a basic join role                                  |
+| Command studio       | Slash-command replies, embeds, link buttons, allowed roles, cooldowns and private/public responses |
+| Server dashboard     | Discord login, server selection, previews and per-server extension toggles                         |
+| Developer foundation | Strict TypeScript, explicit trusted extensions, SQLite persistence and documented setup            |
+
+Built with **discord.js, TypeScript and Node.js SQLite**. Includes 25 automated checks covering validation, permission boundaries, ticket behavior, welcome events and custom-command publishing state. Live Discord behavior still depends on your app permissions, intents and server configuration.
+
+## Project scope
+
+This is a self-hosted foundation for custom bot projects. It runs as one Node process with durable SQLite storage. A local dashboard is included; public hosting requires HTTPS and a persistent server. Extensions are trusted TypeScript code, and dashboard commands use constrained reply actions. TicketForge and WelcomeForge remain separate earlier prototypes.
 
 ## Quick start
 
